@@ -29,3 +29,5 @@ Child idle RSS is sampled using the operating system after `tools/list`. V8 heap
 ### Initial reference observation
 
 The initial Windows observation made before this suite was approximately 574 ms to initialize, 121 tools, and 161,649 serialized catalog bytes. These values are machine-specific reference observations, not regression thresholds.
+
+During initial suite validation on 2026-09-04, two consecutive default runs on the same Windows machine produced initialization medians of 495.04 ms and 516.32 ms. The second median was 4.30% higher than the first. Both runs reported 121 tools, 161,639 catalog bytes, and child idle RSS medians within 0.03 MiB. This is an observed variance sample, not a tolerance or regression threshold.
