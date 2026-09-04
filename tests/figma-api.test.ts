@@ -124,14 +124,18 @@ describe("withTimeout", () => {
 	});
 
 	it("rejects with timeout error when promise is too slow", async () => {
-		const slow = new Promise((resolve) => setTimeout(resolve, 5000));
+		const slow = new Promise((resolve) => {
+			setTimeout(resolve, 5000).unref();
+		});
 		await expect(withTimeout(slow, 50, "slow-op")).rejects.toThrow(
 			"slow-op timed out after 50ms"
 		);
 	});
 
 	it("includes label in timeout error message", async () => {
-		const slow = new Promise((resolve) => setTimeout(resolve, 5000));
+		const slow = new Promise((resolve) => {
+			setTimeout(resolve, 5000).unref();
+		});
 		await expect(
 			withTimeout(slow, 10, "fetch-variables")
 		).rejects.toThrow("fetch-variables timed out after 10ms");

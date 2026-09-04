@@ -484,6 +484,25 @@ export class FigmaWebSocketServer extends EventEmitter {
 
     // Unsolicited data from plugin (FILE_INFO, events, forwarded data)
     if (message.type) {
+      // Opt-in benchmark ping. This is intentionally a tiny transport-only
+      // round trip and is ignored by every normal MCP path. The plugin UI uses
+      // it to measure WebSocket transit without invoking a Figma command.
+      if (message.type === 'BENCHMARK_PING' && message.data?.pingId) {
+        try {
+          ws.send(JSON.stringify({
+            type: 'BENCHMARK_PONG',
+            data: {
+              runId: message.data.runId || null,
+              pingId: message.data.pingId,
+              serverReceivedAt: Date.now(),
+            },
+          }));
+        } catch {
+          // The socket close path handles a disconnected benchmark client.
+        }
+        return;
+      }
+
       // FILE_INFO promotes pending clients to named clients
       if (message.type === 'FILE_INFO' && message.data) {
         this.handleFileInfo(message.data, ws);

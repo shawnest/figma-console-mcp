@@ -20,7 +20,7 @@ const logger = createChildLogger({ component: "design-system-tools" });
 // Types
 // ============================================================================
 
-interface TokenCollection {
+export interface TokenCollection {
 	id: string;
 	name: string;
 	modes: Array<{ modeId: string; name: string }>;
@@ -34,7 +34,7 @@ interface TokenCollection {
 	}>;
 }
 
-interface VisualSpec {
+export interface VisualSpec {
 	fills?: Array<{ type: string; color?: string; opacity?: number }>;
 	strokes?: Array<{ type: string; color?: string; weight?: number; align?: string }>;
 	effects?: Array<{ type: string; color?: string; offset?: { x: number; y: number }; radius?: number; spread?: number }>;
@@ -61,7 +61,7 @@ interface VisualSpec {
 	};
 }
 
-interface ComponentSpec {
+export interface ComponentSpec {
 	id: string;
 	name: string;
 	description?: string;
@@ -72,7 +72,7 @@ interface ComponentSpec {
 	visualSpec?: VisualSpec;
 }
 
-interface StyleSpec {
+export interface StyleSpec {
 	key: string;
 	name: string;
 	styleType: string;
@@ -81,7 +81,7 @@ interface StyleSpec {
 	resolvedValue?: any;
 }
 
-interface DesignSystemKit {
+export interface DesignSystemKit {
 	fileKey: string;
 	fileName?: string;
 	generatedAt: string;
@@ -112,6 +112,35 @@ interface DesignSystemKit {
 	ai_instruction: string;
 }
 
+export type DesignSystemKitSection = "tokens" | "components" | "styles";
+export type DesignSystemKitFormat = "full" | "summary" | "compact";
+
+/** The REST methods used by the design-system kit assembly path. */
+export interface DesignSystemKitApi extends Pick<FigmaAPI, "getLocalVariables"> {
+	getComponents(fileKey: string): Promise<any>;
+	getComponentSets(fileKey: string): Promise<any>;
+	getNodes(fileKey: string, nodeIds: string[], options?: { depth?: number }): Promise<any>;
+	getStyles(fileKey: string): Promise<any>;
+	getImages(
+		fileKey: string,
+		nodeIds: string | string[],
+		options?: { scale?: number; format?: "png" | "jpg" | "svg" | "pdf" },
+	): Promise<{ images: Record<string, string | null> }>;
+}
+
+export interface AssembleDesignSystemKitOptions {
+	api: DesignSystemKitApi;
+	fileKey: string;
+	include?: DesignSystemKitSection[];
+	componentIds?: string[];
+	includeImages?: boolean;
+	format?: DesignSystemKitFormat;
+	variablesCache?: Map<string, { data: any; timestamp: number }>;
+	getDesktopConnector?: () => Promise<any>;
+	/** Injected by benchmarks/tests when a stable generatedAt is useful. */
+	now?: () => string;
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -127,12 +156,16 @@ function calculateSizeKB(data: any): number {
  * Wrap a promise with a timeout to prevent indefinite hangs
  */
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-	return Promise.race([
-		promise,
-		new Promise<never>((_, reject) =>
-			setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
-		),
-	]);
+	let timeoutId: ReturnType<typeof setTimeout>;
+	const timeoutPromise = new Promise<never>((_, reject) => {
+		timeoutId = setTimeout(
+			() => reject(new Error(`${label} timed out after ${ms}ms`)),
+			ms,
+		);
+	});
+	return Promise.race([promise, timeoutPromise]).finally(() =>
+		clearTimeout(timeoutId),
+	);
 }
 
 /**
@@ -284,7 +317,7 @@ function deltaEncodeVariantSpecs(
  * Styles only contain metadata from the styles endpoint — we need getNodes to get actual colors/fonts/effects.
  */
 async function resolveStyleValues(
-	api: FigmaAPI,
+	api: DesignSystemKitApi,
 	fileKey: string,
 	styles: StyleSpec[],
 ): Promise<Map<string, any>> {
@@ -548,6 +581,315 @@ function compressKit(kit: DesignSystemKit, level: "summary" | "inventory" | "com
 // Tool Registration
 // ============================================================================
 
+/**
+ * Assemble a design-system kit without going through the MCP text protocol.
+ *
+ * Keeping this function independent from tool registration makes the expensive
+ * server-side path measurable with a deterministic API double while the MCP
+ * handler below continues to exercise the public end-to-end contract.
+ */
+export async function assembleDesignSystemKit(
+	options: AssembleDesignSystemKitOptions,
+): Promise<DesignSystemKit> {
+	const {
+		api,
+		fileKey,
+		componentIds,
+		includeImages = false,
+		format = "full",
+		variablesCache,
+		getDesktopConnector,
+		now = () => new Date().toISOString(),
+	} = options;
+	const include = options.include ?? ["tokens", "components", "styles"];
+	const errors: Array<{ section: string; message: string }> = [];
+	const kit: DesignSystemKit = {
+		fileKey,
+		generatedAt: now(),
+		format,
+		ai_instruction: "",
+	};
+
+	if (include.includes("tokens")) {
+		try {
+			const cacheKey = `vars:${fileKey}`;
+			let formatted: { collections: any[]; variables: any[]; summary: any } | null = null;
+
+			if (variablesCache) {
+				const cached = variablesCache.get(cacheKey);
+				if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+					formatted = cached.data;
+				}
+			}
+
+			if (!formatted) {
+				formatted = await resolveFormattedVariables({
+					getDesktopConnector,
+					getFigmaAPI: async () => api as FigmaAPI,
+					fileKey,
+				});
+				variablesCache?.set(cacheKey, {
+					data: formatted,
+					timestamp: Date.now(),
+				});
+			}
+
+			kit.tokens = {
+				collections: groupVariablesByCollection(formatted),
+				summary: formatted.summary,
+			};
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			errors.push({ section: "tokens", message });
+		}
+	}
+
+	if (include.includes("components")) {
+		try {
+			const [componentsResponse, componentSetsResponse] = await Promise.all([
+				withTimeout(api.getComponents(fileKey), 30000, "getComponents"),
+				withTimeout(api.getComponentSets(fileKey), 30000, "getComponentSets"),
+			]);
+			const allComponents = componentsResponse?.meta?.components || [];
+			const allComponentSets = componentSetsResponse?.meta?.component_sets || [];
+			const { components: standaloneComponents, componentSets } =
+				deduplicateComponents(allComponents, allComponentSets);
+			let targetComponents = standaloneComponents;
+			let targetSets = componentSets;
+
+			if (componentIds && componentIds.length > 0) {
+				const idSet = new Set(componentIds);
+				targetComponents = standaloneComponents.filter((component: any) =>
+					idSet.has(component.node_id),
+				);
+				targetSets = componentSets.filter((set: any) => idSet.has(set.node_id));
+			}
+
+			const componentSpecs: ComponentSpec[] = [];
+			const allNodeIds = [
+				...targetSets.map((set: any) => set.node_id),
+				...targetComponents.map((component: any) => component.node_id),
+			];
+			const nodeDetailsMap: Record<string, any> = {};
+			const batchSize = 50;
+			for (let i = 0; i < allNodeIds.length; i += batchSize) {
+				const batch = allNodeIds.slice(i, i + batchSize);
+				try {
+					const nodeResponse = await withTimeout(
+						api.getNodes(fileKey, batch, { depth: 2 }),
+						30000,
+						`getNodes(batch ${Math.floor(i / batchSize) + 1})`,
+					);
+					if (nodeResponse?.nodes) {
+						for (const [nodeId, nodeData] of Object.entries(nodeResponse.nodes)) {
+							nodeDetailsMap[nodeId] = (nodeData as any)?.document;
+						}
+					}
+				} catch (err) {
+					// Match the previous behavior: a failed detail batch does not discard
+					// the component inventory returned by the metadata endpoints.
+				}
+			}
+
+			for (const set of targetSets) {
+				const spec: ComponentSpec = {
+					id: set.node_id,
+					name: set.name,
+					description: set.description || undefined,
+				};
+				const setNode = nodeDetailsMap[set.node_id];
+				const variants = allComponents
+					.filter(
+						(component: any) =>
+							component.component_set_id === set.node_id ||
+							component.containing_frame?.nodeId === set.node_id ||
+							component.containing_frame?.containingComponentSet?.nodeId === set.node_id,
+					)
+					.map((component: any) => {
+						const entry: {
+							name: string;
+							id: string;
+							visualSpec?: VisualSpec;
+							visualSpecDelta?: Record<string, any>;
+						} = { name: component.name, id: component.node_id };
+						const variantNode = setNode?.children?.find(
+							(child: any) => child.id === component.node_id,
+						);
+						const visualSpec = extractVisualSpec(variantNode);
+						if (visualSpec) entry.visualSpec = visualSpec;
+						return entry;
+					});
+
+				if (variants.length > 0) {
+					deltaEncodeVariantSpecs(variants);
+					spec.variants = variants;
+				}
+				if (setNode?.componentPropertyDefinitions) {
+					spec.properties = setNode.componentPropertyDefinitions;
+				}
+				if (setNode?.absoluteBoundingBox) {
+					spec.bounds = {
+						width: setNode.absoluteBoundingBox.width,
+						height: setNode.absoluteBoundingBox.height,
+					};
+				}
+				const visualSpec = extractVisualSpec(setNode);
+				if (visualSpec) spec.visualSpec = visualSpec;
+				componentSpecs.push(spec);
+			}
+
+			for (const component of targetComponents) {
+				const spec: ComponentSpec = {
+					id: component.node_id,
+					name: component.name,
+					description: component.description || undefined,
+				};
+				const node = nodeDetailsMap[component.node_id];
+				if (node?.componentPropertyDefinitions) {
+					spec.properties = node.componentPropertyDefinitions;
+				}
+				if (node?.absoluteBoundingBox) {
+					spec.bounds = {
+						width: node.absoluteBoundingBox.width,
+						height: node.absoluteBoundingBox.height,
+					};
+				}
+				const visualSpec = extractVisualSpec(node);
+				if (visualSpec) spec.visualSpec = visualSpec;
+				componentSpecs.push(spec);
+			}
+
+			if (includeImages && componentSpecs.length > 0) {
+				try {
+					for (let i = 0; i < componentSpecs.length; i += batchSize) {
+						const batch = componentSpecs.slice(i, i + batchSize).map((component) => component.id);
+						const imagesResult = await withTimeout(
+							api.getImages(fileKey, batch, { scale: 2, format: "png" }),
+							30000,
+							"getImages",
+						);
+						if (imagesResult?.images) {
+							for (const spec of componentSpecs) {
+								const url = imagesResult.images[spec.id];
+								if (url) spec.imageUrl = url;
+							}
+						}
+					}
+				} catch (err) {
+					const message = err instanceof Error ? err.message : String(err);
+					errors.push({ section: "component_images", message });
+				}
+			}
+
+			kit.components = {
+				items: componentSpecs,
+				summary: {
+					totalComponents: componentSpecs.length,
+					totalComponentSets: targetSets.length,
+				},
+			};
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			errors.push({ section: "components", message });
+		}
+	}
+
+	if (include.includes("styles")) {
+		try {
+			const stylesResponse = await withTimeout(api.getStyles(fileKey), 30000, "getStyles");
+			const allStyles = stylesResponse?.meta?.styles || [];
+			const styleSpecs: StyleSpec[] = allStyles.map((style: any) => ({
+				key: style.key,
+				name: style.name,
+				styleType: style.style_type,
+				description: style.description || undefined,
+				nodeId: style.node_id,
+			}));
+			if (styleSpecs.length > 0) {
+				const resolvedValues = await resolveStyleValues(api, fileKey, styleSpecs);
+				for (const style of styleSpecs) {
+					if (style.nodeId && resolvedValues.has(style.nodeId)) {
+						style.resolvedValue = resolvedValues.get(style.nodeId);
+					}
+				}
+			}
+			const stylesByType: Record<string, number> = {};
+			for (const style of styleSpecs) {
+				stylesByType[style.styleType] = (stylesByType[style.styleType] || 0) + 1;
+			}
+			kit.styles = {
+				items: styleSpecs,
+				summary: { totalStyles: styleSpecs.length, stylesByType },
+			};
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			errors.push({ section: "styles", message });
+		}
+	}
+
+	if (errors.length > 0) kit.errors = errors;
+	const sections: string[] = [];
+	if (kit.tokens) {
+		sections.push(`${kit.tokens.summary.totalVariables} tokens in ${kit.tokens.summary.totalCollections} collections`);
+	}
+	if (kit.components) {
+		sections.push(`${kit.components.summary.totalComponents} components (${kit.components.summary.totalComponentSets} sets)`);
+	}
+	if (kit.styles) sections.push(`${kit.styles.summary.totalStyles} styles`);
+
+	kit.ai_instruction =
+		"DESIGN SYSTEM SPECIFICATION — STRICT VISUAL FIDELITY REQUIRED\n\n" +
+		`Contains: ${sections.join(", ")}.\n\n` +
+		"RULES:\n" +
+		"1. ONLY use colors, spacing, and typography values from this data. " +
+		"Do NOT invent, guess, or add any visual properties not explicitly present.\n" +
+		"2. Map 'visualSpec' directly to CSS:\n" +
+		"   - fills[].color → background-color (e.g. #181818)\n" +
+		"   - strokes[].color/weight → border (e.g. 1px solid #9747FF)\n" +
+		"   - effects[] → box-shadow (type DROP_SHADOW: offset.x offset.y radius spread color)\n" +
+		"   - cornerRadius → border-radius\n" +
+		"   - layout.mode HORIZONTAL → flex-direction:row, VERTICAL → flex-direction:column\n" +
+		"   - layout.paddingTop/Right/Bottom/Left → padding\n" +
+		"   - layout.itemSpacing → gap\n" +
+		"   - layout.primaryAxisAlign → justify-content, counterAxisAlign → align-items\n" +
+		"   - typography → font-family, font-size, font-weight, line-height, letter-spacing\n" +
+		"   - Variant specs are delta-encoded: one base variant carries the full visualSpec; " +
+		"sibling variants carry 'visualSpecDelta' with ONLY the properties that differ from the base " +
+		"(null = property absent on this variant). Merge base visualSpec + visualSpecDelta to get a " +
+		"variant's full spec. A variant with neither field is visually identical to the base.\n" +
+		"3. Do NOT add decorative elements (colored borders, accents, dividers, gradients) " +
+		"unless they appear in the visualSpec data.\n" +
+		"4. Use 'imageUrl' screenshots as the visual ground truth. If the screenshot " +
+		"shows a simple dark card, do not add colored side borders or other embellishments.\n" +
+		"5. Style 'resolvedValue' contains the exact design system colors and typography — " +
+		"match these values precisely, do not substitute similar colors.\n" +
+		"6. Component 'properties' define the component API (props). " +
+		"VARIANT type properties define the visual variants (e.g. Info, Danger, Success). " +
+		"BOOLEAN properties toggle features. TEXT properties accept string content.\n" +
+		"7. When applying to an existing component library (e.g. shadcn, MUI, Chakra), " +
+		"override the library's default theme values with the exact colors, spacing, and " +
+		"typography from this specification. Do not blend with library defaults.";
+
+	const sizeKB = calculateSizeKB(kit);
+	let compressionLevel: "summary" | "inventory" | "compact" | null = null;
+	if (format === "compact") compressionLevel = "compact";
+	else if (format === "summary") compressionLevel = "summary";
+	if (sizeKB > 500) compressionLevel = "compact";
+	else if (sizeKB > 200 && (!compressionLevel || compressionLevel === "summary")) compressionLevel = "inventory";
+	else if (sizeKB > 100 && !compressionLevel) compressionLevel = "summary";
+
+	if (!compressionLevel) return kit;
+	const compressed = compressKit(kit, compressionLevel);
+	const compressedSizeKB = calculateSizeKB(compressed);
+	if (sizeKB > 100) {
+		compressed.ai_instruction =
+			`Response auto-compressed (${compressionLevel}) from ${sizeKB.toFixed(0)}KB to ${compressedSizeKB.toFixed(0)}KB. ` +
+			compressed.ai_instruction +
+			" For full visual specs of specific components, re-call with specific componentIds and format='full'.";
+	}
+	return compressed;
+}
+
 export function registerDesignSystemTools(
 	server: McpServer,
 	getFigmaAPI: () => Promise<FigmaAPI>,
@@ -623,428 +965,20 @@ export function registerDesignSystemTools(
 					);
 				}
 
-				const errors: Array<{ section: string; message: string }> = [];
-				const kit: DesignSystemKit = {
+				const assembled = await assembleDesignSystemKit({
+					api,
 					fileKey: resolvedFileKey,
-					generatedAt: new Date().toISOString(),
+					include,
+					componentIds,
+					includeImages,
 					format,
-					ai_instruction: "",
-				};
-
-				// ----------------------------------------------------------------
-				// Fetch tokens (variables)
-				// ----------------------------------------------------------------
-				if (include.includes("tokens")) {
-					try {
-						logger.info({ fileKey: resolvedFileKey }, "Fetching design tokens");
-
-						// Check cache first
-						const cacheKey = `vars:${resolvedFileKey}`;
-						let formatted:
-							| { collections: any[]; variables: any[]; summary: any }
-							| null = null;
-
-						if (variablesCache) {
-							const cached = variablesCache.get(cacheKey);
-							if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
-								formatted = cached.data;
-								logger.info("Using cached variables data");
-							}
-						}
-
-						if (!formatted) {
-							// Bridge-first: the Desktop Bridge / cloud relay reads variables on
-							// ANY plan via the Plugin API. The Enterprise-only REST Variables API
-							// is the fallback, used only when no bridge is connected — so most
-							// users (non-Enterprise) no longer dead-end on a 403 here.
-							formatted = await resolveFormattedVariables({
-								getDesktopConnector,
-								getFigmaAPI,
-								fileKey: resolvedFileKey,
-							});
-							if (variablesCache) {
-								variablesCache.set(cacheKey, {
-									data: formatted,
-									timestamp: Date.now(),
-								});
-							}
-						}
-
-						const collections = groupVariablesByCollection(formatted);
-
-						kit.tokens = {
-							collections,
-							summary: formatted.summary,
-						};
-					} catch (err) {
-						const msg = err instanceof Error ? err.message : String(err);
-						logger.warn({ error: msg }, "Failed to fetch tokens");
-						errors.push({ section: "tokens", message: msg });
-					}
-				}
-
-				// ----------------------------------------------------------------
-				// Fetch components
-				// ----------------------------------------------------------------
-				if (include.includes("components")) {
-					try {
-						logger.info({ fileKey: resolvedFileKey }, "Fetching components");
-
-						const [componentsResponse, componentSetsResponse] = await Promise.all([
-							withTimeout(api.getComponents(resolvedFileKey), 30000, "getComponents"),
-							withTimeout(api.getComponentSets(resolvedFileKey), 30000, "getComponentSets"),
-						]);
-
-						const allComponents = componentsResponse?.meta?.components || [];
-						const allComponentSets = componentSetsResponse?.meta?.component_sets || [];
-
-						const { components: standaloneComponents, componentSets } =
-							deduplicateComponents(allComponents, allComponentSets);
-
-						// Filter by component IDs if provided
-						let targetComponents = standaloneComponents;
-						let targetSets = componentSets;
-
-						if (componentIds && componentIds.length > 0) {
-							const idSet = new Set(componentIds);
-							targetComponents = standaloneComponents.filter(
-								(c: any) => idSet.has(c.node_id)
-							);
-							targetSets = componentSets.filter(
-								(s: any) => idSet.has(s.node_id)
-							);
-						}
-
-						// Build component specs
-						const componentSpecs: ComponentSpec[] = [];
-
-						// Collect all node IDs we need to fetch details for (batched, not N+1)
-						const allNodeIds = [
-							...targetSets.map((s: any) => s.node_id),
-							...targetComponents.map((c: any) => c.node_id),
-						];
-
-						// Batch fetch ALL node details in one call (max 50 per batch)
-						const nodeDetailsMap: Record<string, any> = {};
-						if (allNodeIds.length > 0) {
-							try {
-								const batchSize = 50;
-								for (let i = 0; i < allNodeIds.length; i += batchSize) {
-									const batch = allNodeIds.slice(i, i + batchSize);
-									const nodeResponse = await withTimeout(
-										api.getNodes(resolvedFileKey, batch, { depth: 2 }),
-										30000,
-										`getNodes(batch ${Math.floor(i / batchSize) + 1})`,
-									);
-									if (nodeResponse?.nodes) {
-										for (const [nodeId, nodeData] of Object.entries(nodeResponse.nodes)) {
-											nodeDetailsMap[nodeId] = (nodeData as any)?.document;
-										}
-									}
-								}
-							} catch (err) {
-								logger.warn({ error: err }, "Failed to batch-fetch component node details");
-							}
-						}
-
-						// Process component sets (multi-variant components)
-						for (const set of targetSets) {
-							const spec: ComponentSpec = {
-								id: set.node_id,
-								name: set.name,
-								description: set.description || undefined,
-							};
-
-							// Use pre-fetched node details
-							const setNode = nodeDetailsMap[set.node_id];
-
-							// Get variant info from the child components
-							// Match by component_set_id, containing_frame.nodeId, OR containingComponentSet.nodeId
-							// (some designs nest variants inside intermediate frames)
-							const variants = allComponents
-								.filter((c: any) =>
-									c.component_set_id === set.node_id ||
-									c.containing_frame?.nodeId === set.node_id ||
-									c.containing_frame?.containingComponentSet?.nodeId === set.node_id
-								)
-								.map((c: any) => {
-									const entry: { name: string; id: string; visualSpec?: VisualSpec; visualSpecDelta?: Record<string, any> } = { name: c.name, id: c.node_id };
-									// Attach visual spec from depth-2 children of the set node
-									if (setNode?.children) {
-										const variantNode = setNode.children.find((ch: any) => ch.id === c.node_id);
-										if (variantNode) {
-											const vs = extractVisualSpec(variantNode);
-											if (vs) entry.visualSpec = vs;
-										}
-									}
-									return entry;
-								});
-
-							if (variants.length > 0) {
-								// Variants share most visual properties — keep the full spec on
-								// the base variant only and encode the rest as deltas
-								deltaEncodeVariantSpecs(variants);
-								spec.variants = variants;
-							}
-
-							if (setNode?.componentPropertyDefinitions) {
-								spec.properties = setNode.componentPropertyDefinitions;
-							}
-							if (setNode?.absoluteBoundingBox) {
-								spec.bounds = {
-									width: setNode.absoluteBoundingBox.width,
-									height: setNode.absoluteBoundingBox.height,
-								};
-							}
-
-							// Extract visual spec from the set node itself
-							if (setNode) {
-								const setSpec = extractVisualSpec(setNode);
-								if (setSpec) {
-									spec.visualSpec = setSpec;
-								}
-							}
-
-							componentSpecs.push(spec);
-						}
-
-						// Process standalone components (not part of a set)
-						for (const comp of targetComponents) {
-							const spec: ComponentSpec = {
-								id: comp.node_id,
-								name: comp.name,
-								description: comp.description || undefined,
-							};
-
-							// Use pre-fetched node details
-							const node = nodeDetailsMap[comp.node_id];
-							if (node?.componentPropertyDefinitions) {
-								spec.properties = node.componentPropertyDefinitions;
-							}
-							if (node?.absoluteBoundingBox) {
-								spec.bounds = {
-									width: node.absoluteBoundingBox.width,
-									height: node.absoluteBoundingBox.height,
-								};
-							}
-
-							// Extract visual spec from the component node
-							if (node) {
-								const nodeSpec = extractVisualSpec(node);
-								if (nodeSpec) {
-									spec.visualSpec = nodeSpec;
-								}
-							}
-
-							componentSpecs.push(spec);
-						}
-
-						// Optionally fetch component images
-						if (includeImages && componentSpecs.length > 0) {
-							try {
-								const nodeIds = componentSpecs.map((c) => c.id);
-								// Batch in groups of 50 to stay within API limits
-								const batchSize = 50;
-								for (let i = 0; i < nodeIds.length; i += batchSize) {
-									const batch = nodeIds.slice(i, i + batchSize);
-									const imagesResult = await withTimeout(
-									api.getImages(resolvedFileKey, batch, { scale: 2, format: "png" }),
-									30000,
-									"getImages",
-								);
-									if (imagesResult?.images) {
-										for (const spec of componentSpecs) {
-											const url = imagesResult.images[spec.id];
-											if (url) {
-												spec.imageUrl = url;
-											}
-										}
-									}
-								}
-							} catch (err) {
-								const msg = err instanceof Error ? err.message : String(err);
-								logger.warn({ error: msg }, "Failed to fetch component images");
-								errors.push({ section: "component_images", message: msg });
-							}
-						}
-
-						kit.components = {
-							items: componentSpecs,
-							summary: {
-								totalComponents: componentSpecs.length,
-								totalComponentSets: targetSets.length,
-							},
-						};
-					} catch (err) {
-						const msg = err instanceof Error ? err.message : String(err);
-						logger.warn({ error: msg }, "Failed to fetch components");
-						errors.push({ section: "components", message: msg });
-					}
-				}
-
-				// ----------------------------------------------------------------
-				// Fetch styles
-				// ----------------------------------------------------------------
-				if (include.includes("styles")) {
-					try {
-						logger.info({ fileKey: resolvedFileKey }, "Fetching styles");
-
-						const stylesResponse = await withTimeout(
-							api.getStyles(resolvedFileKey),
-							30000,
-							"getStyles",
-						);
-						const allStyles = stylesResponse?.meta?.styles || [];
-
-						const styleSpecs: StyleSpec[] = allStyles.map((s: any) => ({
-							key: s.key,
-							name: s.name,
-							styleType: s.style_type,
-							description: s.description || undefined,
-							nodeId: s.node_id,
-						}));
-
-						// Resolve actual values for styles (colors, typography, effects)
-						if (styleSpecs.length > 0) {
-							try {
-								const resolvedValues = await resolveStyleValues(api, resolvedFileKey, styleSpecs);
-								for (const style of styleSpecs) {
-									if (style.nodeId && resolvedValues.has(style.nodeId)) {
-										style.resolvedValue = resolvedValues.get(style.nodeId);
-									}
-								}
-							} catch (err) {
-								logger.warn({ error: err }, "Failed to resolve style values");
-							}
-						}
-
-						const stylesByType: Record<string, number> = {};
-						for (const s of styleSpecs) {
-							stylesByType[s.styleType] = (stylesByType[s.styleType] || 0) + 1;
-						}
-
-						kit.styles = {
-							items: styleSpecs,
-							summary: {
-								totalStyles: styleSpecs.length,
-								stylesByType,
-							},
-						};
-					} catch (err) {
-						const msg = err instanceof Error ? err.message : String(err);
-						logger.warn({ error: msg }, "Failed to fetch styles");
-						errors.push({ section: "styles", message: msg });
-					}
-				}
-
-				// ----------------------------------------------------------------
-				// Build AI instruction
-				// ----------------------------------------------------------------
-				if (errors.length > 0) {
-					kit.errors = errors;
-				}
-
-				const sections = [];
-				if (kit.tokens) sections.push(`${kit.tokens.summary.totalVariables} tokens in ${kit.tokens.summary.totalCollections} collections`);
-				if (kit.components) sections.push(`${kit.components.summary.totalComponents} components (${kit.components.summary.totalComponentSets} sets)`);
-				if (kit.styles) sections.push(`${kit.styles.summary.totalStyles} styles`);
-
-				kit.ai_instruction =
-					"DESIGN SYSTEM SPECIFICATION — STRICT VISUAL FIDELITY REQUIRED\n\n" +
-					`Contains: ${sections.join(", ")}.\n\n` +
-					"RULES:\n" +
-					"1. ONLY use colors, spacing, and typography values from this data. " +
-					"Do NOT invent, guess, or add any visual properties not explicitly present.\n" +
-					"2. Map 'visualSpec' directly to CSS:\n" +
-					"   - fills[].color → background-color (e.g. #181818)\n" +
-					"   - strokes[].color/weight → border (e.g. 1px solid #9747FF)\n" +
-					"   - effects[] → box-shadow (type DROP_SHADOW: offset.x offset.y radius spread color)\n" +
-					"   - cornerRadius → border-radius\n" +
-					"   - layout.mode HORIZONTAL → flex-direction:row, VERTICAL → flex-direction:column\n" +
-					"   - layout.paddingTop/Right/Bottom/Left → padding\n" +
-					"   - layout.itemSpacing → gap\n" +
-					"   - layout.primaryAxisAlign → justify-content, counterAxisAlign → align-items\n" +
-					"   - typography → font-family, font-size, font-weight, line-height, letter-spacing\n" +
-					"   - Variant specs are delta-encoded: one base variant carries the full visualSpec; " +
-					"sibling variants carry 'visualSpecDelta' with ONLY the properties that differ from the base " +
-					"(null = property absent on this variant). Merge base visualSpec + visualSpecDelta to get a " +
-					"variant's full spec. A variant with neither field is visually identical to the base.\n" +
-					"3. Do NOT add decorative elements (colored borders, accents, dividers, gradients) " +
-					"unless they appear in the visualSpec data.\n" +
-					"4. Use 'imageUrl' screenshots as the visual ground truth. If the screenshot " +
-					"shows a simple dark card, do not add colored side borders or other embellishments.\n" +
-					"5. Style 'resolvedValue' contains the exact design system colors and typography — " +
-					"match these values precisely, do not substitute similar colors.\n" +
-					"6. Component 'properties' define the component API (props). " +
-					"VARIANT type properties define the visual variants (e.g. Info, Danger, Success). " +
-					"BOOLEAN properties toggle features. TEXT properties accept string content.\n" +
-					"7. When applying to an existing component library (e.g. shadcn, MUI, Chakra), " +
-					"override the library's default theme values with the exact colors, spacing, and " +
-					"typography from this specification. Do not blend with library defaults.";
-
-				// ----------------------------------------------------------------
-				// Adaptive compression for large responses
-				// Thresholds tuned for consumer AI context windows (~128K tokens ≈ ~400KB text)
-				// ----------------------------------------------------------------
-				const sizeKB = calculateSizeKB(kit);
-				logger.info({ sizeKB: sizeKB.toFixed(0), format }, "Kit assembled, checking compression");
-
-				// Determine compression level from format + size
-				let compressionLevel: "summary" | "inventory" | "compact" | null = null;
-
-				if (format === "compact") {
-					compressionLevel = "compact";
-				} else if (format === "summary") {
-					compressionLevel = "summary";
-				}
-
-				// Auto-compress based on size regardless of format setting
-				// Lower thresholds to stay within consumer context windows
-				if (sizeKB > 500) {
-					compressionLevel = "compact"; // >500KB → just names and types
-				} else if (sizeKB > 200) {
-					// Upgrade to at least inventory if not already more aggressive
-					if (!compressionLevel || compressionLevel === "summary") {
-						compressionLevel = "inventory";
-					}
-				} else if (sizeKB > 100) {
-					// Upgrade to at least summary
-					if (!compressionLevel) {
-						compressionLevel = "summary";
-					}
-				}
-
-				if (compressionLevel) {
-					const compressed = compressKit(kit, compressionLevel);
-					const compressedSizeKB = calculateSizeKB(compressed);
-
-					if (sizeKB > 100) {
-						compressed.ai_instruction =
-							`Response auto-compressed (${compressionLevel}) from ${sizeKB.toFixed(0)}KB to ${compressedSizeKB.toFixed(0)}KB. ` +
-							compressed.ai_instruction +
-							" For full visual specs of specific components, re-call with specific componentIds and format='full'.";
-					}
-
-					logger.info({ originalKB: sizeKB.toFixed(0), compressedKB: compressedSizeKB.toFixed(0), level: compressionLevel }, "Kit compressed");
-
-					return {
-						content: [
-							{
-								type: "text",
-								text: JSON.stringify(compressed),
-							},
-						],
-					};
-				}
-
+					variablesCache,
+					getDesktopConnector,
+				});
 				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify(kit),
-						},
-					],
+					content: [{ type: "text", text: JSON.stringify(assembled) }],
 				};
+
 			} catch (error) {
 				logger.error({ error }, "Failed to generate design system kit");
 				const errorMessage =

@@ -137,6 +137,30 @@ describe('FigmaWebSocketServer', () => {
       await disconnectedPromise;
     });
 
+    test('echoes the opt-in benchmark ping without routing it as an MCP command', async () => {
+      server = new FigmaWebSocketServer({ port: TEST_PORT });
+      await server.start();
+
+      const client = await connectClient(server, TEST_PORT);
+      clients.push(client);
+      const pong = new Promise<any>((resolve) => {
+        client.on('message', (raw) => {
+          const message = JSON.parse(raw.toString());
+          if (message.type === 'BENCHMARK_PONG') resolve(message);
+        });
+      });
+
+      client.send(JSON.stringify({
+        type: 'BENCHMARK_PING',
+        data: { runId: 'run-1', pingId: 'ping-1' },
+      }));
+
+      await expect(pong).resolves.toEqual(expect.objectContaining({
+        type: 'BENCHMARK_PONG',
+        data: expect.objectContaining({ runId: 'run-1', pingId: 'ping-1' }),
+      }));
+    });
+
     test('replaces existing client on new connection', async () => {
       server = new FigmaWebSocketServer({ port: TEST_PORT });
       await server.start();

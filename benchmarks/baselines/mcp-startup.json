@@ -1,0 +1,287 @@
+{
+  "schemaVersion": 1,
+  "suite": "mcp-startup",
+  "scenario": "initialize-and-list-tools",
+  "environment": {
+    "commit": "03cfdd7",
+    "dirty": true,
+    "os": "win32",
+    "arch": "x64",
+    "node": "v24.19.0",
+    "packageVersion": "1.40.0",
+    "cpu": "AMD Ryzen 7 7730U with Radeon Graphics         ",
+    "memoryMb": 38749,
+    "timestamp": "2026-09-04T09:29:03.985Z"
+  },
+  "configuration": {
+    "warmupRuns": 1,
+    "measuredRuns": 20,
+    "serverPath": "dist/local.js",
+    "requestTimeoutMs": 30000,
+    "catalogSerialization": "UTF-8 byte length of JSON.stringify(tools)",
+    "estimatedCatalogTokens": "ceil(catalogBytes / 4); estimate only, not tokenizer output",
+    "percentileMethod": "linear interpolation between adjacent ranks"
+  },
+  "metrics": {
+    "initializeMs": {
+      "median": 496.4424,
+      "p95": 636.0678,
+      "p99": 720.09,
+      "min": 437.8702,
+      "max": 741.0955,
+      "mean": 511.1118,
+      "standardDeviation": 72.1553,
+      "coefficientOfVariation": 0.1412
+    },
+    "listToolsMs": {
+      "median": 19.1841,
+      "p95": 22.4338,
+      "p99": 28.604,
+      "min": 14.8389,
+      "max": 30.1465,
+      "mean": 19.2215,
+      "standardDeviation": 3.518,
+      "coefficientOfVariation": 0.183
+    },
+    "toolCount": 121,
+    "catalogBytes": 161639,
+    "estimatedCatalogTokens": 40410,
+    "idleRssMb": {
+      "median": 101.7988,
+      "p95": 103.4289,
+      "p99": 103.5952,
+      "min": 101.1484,
+      "max": 103.6367,
+      "mean": 102.0541,
+      "standardDeviation": 0.7046,
+      "coefficientOfVariation": 0.0069
+    },
+    "idleHeapMb": null
+  },
+  "availability": {
+    "idleRssMb": "available",
+    "idleHeapMb": "unavailable: a standard MCP stdio child does not expose V8 heap statistics without intrusive instrumentation"
+  },
+  "samples": [
+    {
+      "run": 1,
+      "warmup": false,
+      "initializeMs": 496.883,
+      "listToolsMs": 20.157,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 101.887,
+      "idleHeapMb": null
+    },
+    {
+      "run": 2,
+      "warmup": false,
+      "initializeMs": 544.958,
+      "listToolsMs": 22.028,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 101.844,
+      "idleHeapMb": null
+    },
+    {
+      "run": 3,
+      "warmup": false,
+      "initializeMs": 508.771,
+      "listToolsMs": 20.731,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 101.43,
+      "idleHeapMb": null
+    },
+    {
+      "run": 4,
+      "warmup": false,
+      "initializeMs": 618.916,
+      "listToolsMs": 21.163,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 102.305,
+      "idleHeapMb": null
+    },
+    {
+      "run": 5,
+      "warmup": false,
+      "initializeMs": 500.505,
+      "listToolsMs": 20.896,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 103.418,
+      "idleHeapMb": null
+    },
+    {
+      "run": 6,
+      "warmup": false,
+      "initializeMs": 437.87,
+      "listToolsMs": 14.957,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 103.051,
+      "idleHeapMb": null
+    },
+    {
+      "run": 7,
+      "warmup": false,
+      "initializeMs": 630.54,
+      "listToolsMs": 21.818,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 101.434,
+      "idleHeapMb": null
+    },
+    {
+      "run": 8,
+      "warmup": false,
+      "initializeMs": 516.955,
+      "listToolsMs": 17.711,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 101.727,
+      "idleHeapMb": null
+    },
+    {
+      "run": 9,
+      "warmup": false,
+      "initializeMs": 447.998,
+      "listToolsMs": 14.839,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 103.133,
+      "idleHeapMb": null
+    },
+    {
+      "run": 10,
+      "warmup": false,
+      "initializeMs": 476.645,
+      "listToolsMs": 15.341,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 101.148,
+      "idleHeapMb": null
+    },
+    {
+      "run": 11,
+      "warmup": false,
+      "initializeMs": 467.151,
+      "listToolsMs": 15.325,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 101.75,
+      "idleHeapMb": null
+    },
+    {
+      "run": 12,
+      "warmup": false,
+      "initializeMs": 441.183,
+      "listToolsMs": 19.977,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 101.676,
+      "idleHeapMb": null
+    },
+    {
+      "run": 13,
+      "warmup": false,
+      "initializeMs": 468.683,
+      "listToolsMs": 21.413,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 101.297,
+      "idleHeapMb": null
+    },
+    {
+      "run": 14,
+      "warmup": false,
+      "initializeMs": 496.576,
+      "listToolsMs": 16.69,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 101.754,
+      "idleHeapMb": null
+    },
+    {
+      "run": 15,
+      "warmup": false,
+      "initializeMs": 741.095,
+      "listToolsMs": 30.146,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 103.637,
+      "idleHeapMb": null
+    },
+    {
+      "run": 16,
+      "warmup": false,
+      "initializeMs": 491.795,
+      "listToolsMs": 21.728,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 102.047,
+      "idleHeapMb": null
+    },
+    {
+      "run": 17,
+      "warmup": false,
+      "initializeMs": 503.665,
+      "listToolsMs": 18.392,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 102.184,
+      "idleHeapMb": null
+    },
+    {
+      "run": 18,
+      "warmup": false,
+      "initializeMs": 474.689,
+      "listToolsMs": 17.776,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 101.609,
+      "idleHeapMb": null
+    },
+    {
+      "run": 19,
+      "warmup": false,
+      "initializeMs": 461.05,
+      "listToolsMs": 16.852,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 102.32,
+      "idleHeapMb": null
+    },
+    {
+      "run": 20,
+      "warmup": false,
+      "initializeMs": 496.309,
+      "listToolsMs": 16.491,
+      "toolCount": 121,
+      "catalogBytes": 161639,
+      "estimatedCatalogTokens": 40410,
+      "idleRssMb": 101.434,
+      "idleHeapMb": null
+    }
+  ]
+}

@@ -349,6 +349,100 @@
       height: 11px;
     }
 
+    /* ===== Row: opt-in benchmark panel ===== */
+    .benchmark-panel {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 5px;
+      padding: 6px;
+      background: var(--figma-color-bg-secondary, #383838);
+      border: 1px solid var(--figma-color-border, #4a4a4a);
+      border-radius: 3px;
+      box-sizing: border-box;
+    }
+
+    .benchmark-fields {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      color: var(--figma-color-text-secondary, rgba(255, 255, 255, 0.7));
+      font-size: 9px;
+    }
+
+    .benchmark-fields label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .benchmark-fields input[type="text"],
+    .benchmark-fields select {
+      min-width: 0;
+      flex: 1;
+      background: var(--figma-color-bg, #2c2c2c);
+      border: 1px solid var(--figma-color-border, #4a4a4a);
+      border-radius: 2px;
+      color: var(--figma-color-text, rgba(255, 255, 255, 0.9));
+      font: inherit;
+      padding: 2px 3px;
+    }
+
+    .benchmark-grid {
+      display: flex;
+      gap: 5px;
+    }
+
+    .benchmark-grid label {
+      flex: 1;
+    }
+
+    .benchmark-check {
+      justify-content: flex-start;
+    }
+
+    .benchmark-check input {
+      margin: 0;
+    }
+
+    .benchmark-actions {
+      display: flex;
+      gap: 5px;
+    }
+
+    .benchmark-btn {
+      flex: 1;
+      min-width: 0;
+      background: transparent;
+      border: 1px solid var(--figma-color-border, #4a4a4a);
+      border-radius: 2px;
+      color: var(--figma-color-text, rgba(255, 255, 255, 0.9));
+      font: inherit;
+      font-size: 9px;
+      padding: 3px 4px;
+      cursor: pointer;
+    }
+
+    .benchmark-btn:hover:not(:disabled) {
+      border-color: var(--figma-color-bg-brand, #0d99ff);
+      color: var(--figma-color-bg-brand, #0d99ff);
+    }
+
+    .benchmark-btn:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    .benchmark-status {
+      min-height: 12px;
+      color: var(--figma-color-text-secondary, rgba(255, 255, 255, 0.55));
+      font-size: 9px;
+      line-height: 1.35;
+    }
+
+    body[data-theme="light"] .benchmark-panel {
+      background: #f0f0f0;
+    }
+
     /* ===== Row: plugin update banner ===== */
     .update-banner {
       align-items: center;
@@ -520,12 +614,47 @@
         </svg>
         Activity
       </button>
+      <button class="sub-btn" id="benchmark-toggle" onclick="toggleBenchmarkPanel()" aria-expanded="false" aria-controls="benchmark-panel">
+        Benchmark
+      </button>
       <button class="icon-btn" id="copy-log-btn" onclick="copyLogToClipboard()" title="Copy activity to clipboard" aria-label="Copy activity to clipboard" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
         </svg>
       </button>
+    </div>
+
+    <!-- Manual benchmark panel (opt-in; hidden during normal operation) -->
+    <div class="row benchmark-panel" id="benchmark-panel" role="region" aria-label="Plugin performance benchmark">
+      <div class="benchmark-fields">
+        <label>Fixture <input type="text" id="benchmark-fixture-version" value="ds-fixture-v1" aria-label="Fixture version" /></label>
+        <label>Desktop <input type="text" id="benchmark-desktop-version" placeholder="Figma Desktop version" aria-label="Figma Desktop version" /></label>
+        <div class="benchmark-grid">
+          <label>Variables
+            <select id="benchmark-variable-tier" aria-label="Variable tier">
+              <option value="10">10</option>
+              <option value="100" selected>100</option>
+              <option value="1000">1,000</option>
+              <option value="5000">5,000</option>
+            </select>
+          </label>
+          <label>Pages
+            <select id="benchmark-page-tier" aria-label="Page tier">
+              <option value="5" selected>5</option>
+              <option value="25">25</option>
+              <option value="100">100</option>
+            </select>
+          </label>
+        </div>
+        <label class="benchmark-check"><input type="checkbox" id="benchmark-fresh-open" /> File freshly opened</label>
+      </div>
+      <div class="benchmark-actions">
+        <button class="benchmark-btn" id="benchmark-session-btn" onclick="toggleBenchmarkSession()">Start</button>
+        <button class="benchmark-btn" id="benchmark-sample-btn" onclick="runBenchmarkSample()" disabled>Run sample</button>
+        <button class="benchmark-btn" id="benchmark-export-btn" onclick="exportBenchmarkResults()" disabled>Export JSON</button>
+      </div>
+      <div class="benchmark-status" id="benchmark-status" aria-live="polite"></div>
     </div>
 
     <!-- Activity panel (shown when Activity active) -->
@@ -638,6 +767,337 @@
       if (m < 60) return m + 'm ago';
       var h = Math.floor(m / 60);
       return h + 'h ago';
+    }
+
+    // ============================================================================
+    // OPT-IN PERFORMANCE BENCHMARKING
+    // ============================================================================
+    // This state is empty and inactive during normal operation. The Benchmark
+    // panel enables it explicitly, then the read-only sample exercises the same
+    // command routes an MCP client would use. Results from this iframe are joined
+    // with the Plugin worker snapshot when the user downloads JSON.
+    window.__figmaBenchmark = {
+      enabled: false,
+      runId: null,
+      entries: [],
+      sequence: 0,
+      pluginSnapshot: null,
+      pendingPings: {},
+      now: function() {
+        return (typeof performance !== 'undefined' && typeof performance.now === 'function')
+          ? performance.now()
+          : Date.now();
+      },
+      clock: (typeof performance !== 'undefined' && typeof performance.now === 'function')
+        ? 'performance.now'
+        : 'Date.now',
+      round: function(value) { return Math.round(value * 1000) / 1000; },
+      record: function(stage, startMs, endMs, details) {
+        if (!this.enabled) return;
+        details = details || {};
+        var entry = {
+          sequence: ++this.sequence,
+          runId: this.runId,
+          requestId: details.requestId || null,
+          stage: stage,
+          scope: details.scope || 'ui',
+          clock: this.clock,
+          startMs: this.round(startMs),
+          durationMs: this.round(Math.max(0, endMs - startMs)),
+          recordedAt: Date.now()
+        };
+        for (var key in details) {
+          if (details.hasOwnProperty(key) && key !== 'requestId' && key !== 'scope') {
+            entry[key] = details[key];
+          }
+        }
+        this.entries.push(entry);
+      },
+      setStatus: function(message, isError) {
+        var el = document.getElementById('benchmark-status');
+        if (el) {
+          el.textContent = message || '';
+          el.style.color = isError ? 'var(--color-error)' : '';
+        }
+      },
+      handleControlResult: function(message) {
+        var snapshot = message.data || null;
+        if (message.success === false) {
+          this.setStatus('Benchmark control failed: ' + (message.error || 'unknown error'), true);
+          return;
+        }
+        this.pluginSnapshot = snapshot;
+        if (snapshot && snapshot.enabled) {
+          this.enabled = true;
+          this.runId = snapshot.runId;
+          this.entries = [];
+          this.sequence = 0;
+          updateBenchmarkControls();
+          this.setStatus('Capture active (' + this.runId + ')');
+        } else {
+          this.enabled = false;
+          updateBenchmarkControls();
+          this.setStatus('Capture stopped; export is still available.');
+        }
+      },
+      handleExportResult: function(message) {
+        if (message.success === false) {
+          this.setStatus('Benchmark export failed: ' + (message.error || 'unknown error'), true);
+          return;
+        }
+        this.pluginSnapshot = message.data || null;
+      },
+      handleWebSocketPong: function(message, port) {
+        var ping = this.pendingPings[message.pingId];
+        if (!ping || message.runId !== this.runId) return;
+        delete this.pendingPings[message.pingId];
+        this.record('websocket-transit-round-trip', ping.startedAt, this.now(), {
+          scope: 'websocket',
+          messageType: 'BENCHMARK_PING',
+          port: port,
+          measurement: 'UI send to server response'
+        });
+        ping.resolve({ port: port });
+      }
+    };
+
+    function benchmarkUtf8Bytes(text) {
+      if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(text).length;
+      try { return unescape(encodeURIComponent(text)).length; } catch (e) { return text.length; }
+    }
+
+    // WebSocket JSON work is measured in the UI realm, where encoding and
+    // decoding actually happen. Disabled mode follows the original fast path.
+    window.__figmaBenchmarkEncode = function(message, details) {
+      if (!window.__figmaBenchmark.enabled) return JSON.stringify(message);
+      var startedAt = window.__figmaBenchmark.now();
+      var json = JSON.stringify(message);
+      window.__figmaBenchmark.record('ui-json-encoding', startedAt, window.__figmaBenchmark.now(), Object.assign({}, details || {}, {
+        byteLength: benchmarkUtf8Bytes(json)
+      }));
+      return json;
+    };
+
+    window.__figmaBenchmarkDecode = function(raw, details) {
+      if (!window.__figmaBenchmark.enabled) return JSON.parse(raw);
+      var startedAt = window.__figmaBenchmark.now();
+      var message = JSON.parse(raw);
+      window.__figmaBenchmark.record('ui-json-decoding', startedAt, window.__figmaBenchmark.now(), Object.assign({}, details || {}, {
+        byteLength: typeof raw === 'string' ? benchmarkUtf8Bytes(raw) : null
+      }));
+      return message;
+    };
+
+    function benchmarkReadMetadata() {
+      var value = function(id) {
+        var el = document.getElementById(id);
+        return el ? el.value : '';
+      };
+      var checked = document.getElementById('benchmark-fresh-open');
+      return {
+        fixtureVersion: value('benchmark-fixture-version') || null,
+        variableCount: Number(value('benchmark-variable-tier')) || null,
+        pageCount: Number(value('benchmark-page-tier')) || null,
+        figmaDesktopVersion: value('benchmark-desktop-version') || null,
+        freshlyOpened: !!(checked && checked.checked)
+      };
+    }
+
+    function updateBenchmarkControls() {
+      var session = document.getElementById('benchmark-session-btn');
+      var sample = document.getElementById('benchmark-sample-btn');
+      var exportButton = document.getElementById('benchmark-export-btn');
+      if (session) session.textContent = window.__figmaBenchmark.enabled ? 'Stop' : 'Start';
+      if (sample) sample.disabled = !window.__figmaBenchmark.enabled;
+      if (exportButton) exportButton.disabled = !window.__figmaBenchmark.pluginSnapshot && !window.__figmaBenchmark.enabled;
+    }
+
+    function startBenchmarkSession() {
+      var runId = 'figma-plugin-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
+      window.__figmaBenchmark.setStatus('Enabling capture…');
+      return window.sendPluginCommand('BENCHMARK_CONTROL', { enabled: true, runId: runId }, 5000)
+        .then(function(result) {
+          if (!result || result.success === false) throw new Error(result && result.error ? result.error : 'No control response');
+          window.__figmaBenchmark.handleControlResult({ success: true, data: result.data });
+        })
+        .catch(function(error) {
+          window.__figmaBenchmark.setStatus('Could not start: ' + (error.message || String(error)), true);
+          throw error;
+        });
+    }
+
+    function stopBenchmarkSession() {
+      window.__figmaBenchmark.setStatus('Stopping capture…');
+      return window.sendPluginCommand('BENCHMARK_CONTROL', { enabled: false }, 5000)
+        .then(function(result) {
+          if (!result || result.success === false) throw new Error(result && result.error ? result.error : 'No control response');
+          window.__figmaBenchmark.handleControlResult({ success: true, data: result.data });
+        })
+        .catch(function(error) {
+          window.__figmaBenchmark.setStatus('Could not stop: ' + (error.message || String(error)), true);
+        });
+    }
+
+    function toggleBenchmarkSession() {
+      if (window.__figmaBenchmark.enabled) stopBenchmarkSession();
+      else startBenchmarkSession();
+    }
+
+    function runBenchmarkSample() {
+      var benchmark = window.__figmaBenchmark;
+      if (!benchmark.enabled) return;
+      var startedAt = benchmark.now();
+      benchmark.setStatus('Running read-only variables + components sample…');
+      Promise.resolve()
+        // These are the existing command handlers, so the sample exercises
+        // Plugin API calls and result relays without changing document state.
+        .then(function() { return window.sendPluginCommand('REFRESH_VARIABLES', {}, 300000); })
+        .then(function(result) {
+          if (result && result.success === false) throw new Error(result.error || 'Variable refresh failed');
+          return window.sendPluginCommand('GET_LOCAL_COMPONENTS', {}, 300000);
+        })
+        .then(function(result) {
+          if (result && result.success === false) throw new Error(result.error || 'Component traversal failed');
+          return window.__figmaBenchmarkPingWebSockets();
+        })
+        .then(function() {
+          benchmark.record('benchmark-read-only-sample', startedAt, benchmark.now(), benchmarkReadMetadata());
+          benchmark.setStatus('Sample complete; capture remains active.');
+          updateBenchmarkControls();
+        })
+        .catch(function(error) {
+          benchmark.setStatus('Sample failed: ' + (error.message || String(error)), true);
+        });
+    }
+
+    window.__figmaBenchmarkPingWebSockets = function() {
+      var benchmark = window.__figmaBenchmark;
+      var connections = (typeof window.__wsGetActiveConnections === 'function')
+        ? (window.__wsGetActiveConnections() || [])
+        : [];
+      var targets = connections.filter(function(conn) {
+        return conn && typeof conn.port === 'number' && conn.ws && conn.ws.readyState === 1;
+      });
+      if (!targets.length) {
+        benchmark.setStatus('Sample complete; no MCP WebSocket was connected for transit timing.');
+        return Promise.resolve([]);
+      }
+      return Promise.all(targets.map(function(conn, index) {
+        return new Promise(function(resolve) {
+          var pingId = benchmark.runId + '-ping-' + Date.now() + '-' + index;
+          var startedAt = benchmark.now();
+          var timeoutId = setTimeout(function() {
+            if (!benchmark.pendingPings[pingId]) return;
+            delete benchmark.pendingPings[pingId];
+            benchmark.record('websocket-transit-round-trip', startedAt, benchmark.now(), {
+              scope: 'websocket',
+              messageType: 'BENCHMARK_PING',
+              port: conn.port,
+              success: false,
+              measurement: 'timeout after 5000ms'
+            });
+            resolve({ port: conn.port, timeout: true });
+          }, 5000);
+          benchmark.pendingPings[pingId] = {
+            startedAt: startedAt,
+            resolve: function(value) { clearTimeout(timeoutId); resolve(value); }
+          };
+          try {
+            var payload = {
+              type: 'BENCHMARK_PING',
+              data: { runId: benchmark.runId, pingId: pingId }
+            };
+            conn.ws.send(window.__figmaBenchmarkEncode(payload, { scope: 'websocket', messageType: 'BENCHMARK_PING', port: conn.port }));
+          } catch (error) {
+            clearTimeout(timeoutId);
+            delete benchmark.pendingPings[pingId];
+            resolve({ port: conn.port, error: error.message || String(error) });
+          }
+        });
+      }));
+    };
+
+    function downloadBenchmarkJson(payload) {
+      var json = JSON.stringify(payload, null, 2);
+      var blob = new Blob([json], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = 'figma-plugin-benchmark-' + (payload.runId || Date.now()) + '.json';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+      return json.length;
+    }
+
+    function exportBenchmarkResults() {
+      var benchmark = window.__figmaBenchmark;
+      benchmark.setStatus('Preparing JSON export…');
+      return window.sendPluginCommand('BENCHMARK_EXPORT', {}, 5000)
+        .then(function(result) {
+          if (!result || result.success === false) throw new Error(result && result.error ? result.error : 'No export response');
+          benchmark.handleExportResult({ success: true, data: result.data });
+          var plugin = result.data || benchmark.pluginSnapshot || {};
+          var metadata = benchmarkReadMetadata();
+          var payload = {
+            schemaVersion: 1,
+            suite: 'figma-plugin-manual',
+            scenario: 'desktop-bridge-fixture',
+            runId: plugin.runId || benchmark.runId,
+            manual: true,
+            machineSpecific: true,
+            environment: {
+              figmaDesktopVersion: metadata.figmaDesktopVersion,
+              editorType: plugin.editorType || null,
+              pluginVersion: plugin.pluginVersion || null,
+              fileKey: plugin.fileKey || null,
+              fileName: plugin.fileName || null,
+              activePage: plugin.activePage || null,
+              fixtureVersion: metadata.fixtureVersion,
+              variableCount: metadata.variableCount,
+              pageCount: metadata.pageCount,
+              freshlyOpened: metadata.freshlyOpened,
+              exportedAt: new Date().toISOString()
+            },
+            configuration: {
+              benchmarkMode: 'opt-in',
+              clock: plugin.clock || benchmark.clock,
+              timingEntries: 'durations use performance.now where available; UI↔worker postMessage is ack round-trip',
+              sample: 'REFRESH_VARIABLES followed by GET_LOCAL_COMPONENTS and WebSocket ping'
+            },
+            plugin: plugin,
+            ui: {
+              clock: benchmark.clock,
+              entries: benchmark.entries.slice()
+            }
+          };
+          var bytes = downloadBenchmarkJson(payload);
+          benchmark.setStatus('Exported ' + bytes + ' JSON characters.');
+          updateBenchmarkControls();
+          return payload;
+        })
+        .catch(function(error) {
+          benchmark.setStatus('Export failed: ' + (error.message || String(error)), true);
+          throw error;
+        });
+    }
+
+    function toggleBenchmarkPanel() {
+      var panel = document.getElementById('benchmark-panel');
+      var button = document.getElementById('benchmark-toggle');
+      if (!panel) return;
+      var opening = !panel.classList.contains('visible');
+      panel.classList.toggle('visible', opening);
+      if (button) {
+        button.classList.toggle('active', opening);
+        button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+      }
+      if (opening) {
+        var log = document.getElementById('log-panel');
+        if (log && log.classList.contains('visible')) toggleLog();
+      }
+      autoResize();
     }
 
     // ============================================================================
@@ -1072,6 +1532,13 @@
       var wsPort = null;
       var wsConnected = false;
 
+      function sendWsMessage(socket, message, details) {
+        socket.send(window.__figmaBenchmarkEncode(message, Object.assign({
+          scope: 'websocket',
+          messageType: message && message.type ? message.type : null
+        }, details || {})));
+      }
+
       // Method-to-function mapping
       var methodMap = {
         'EXECUTE_CODE': function(params) { return window.executeCode(params.code, params.timeout); },
@@ -1300,17 +1767,17 @@
       function initializeConnection(connWs, port) {
         // Forward cached variables if available
         if (window.__figmaVariablesReady && window.__figmaVariablesData) {
-          connWs.send(JSON.stringify({
+          sendWsMessage(connWs, {
             type: 'VARIABLES_DATA',
             data: window.__figmaVariablesData
-          }));
+          });
         }
 
         // Proactively report file identity to this server
         window.sendPluginCommand('GET_FILE_INFO', {})
           .then(function(info) {
             if (connWs.readyState === 1 && info && info.success !== false) {
-              connWs.send(JSON.stringify({ type: 'FILE_INFO', data: info.fileInfo || info }));
+              sendWsMessage(connWs, { type: 'FILE_INFO', data: info.fileInfo || info });
             }
           })
           .catch(function() { /* non-critical */ });
@@ -1479,7 +1946,12 @@
       function attachWsHandlers(activeWs, port) {
         activeWs.onmessage = function(event) {
           try {
-            var message = JSON.parse(event.data);
+            var message = window.__figmaBenchmarkDecode(event.data, { scope: 'websocket', port: port });
+
+            if (message.type === 'BENCHMARK_PONG' && message.data) {
+              window.__figmaBenchmark.handleWebSocketPong(message.data, port);
+              return;
+            }
 
             // Handle server identity messages
             if (message.type === 'SERVER_HELLO' && message.data) {
@@ -1505,7 +1977,7 @@
 
             var handler = methodMap[message.method];
             if (!handler) {
-              activeWs.send(JSON.stringify({ id: message.id, error: 'Unknown method: ' + message.method }));
+              sendWsMessage(activeWs, { id: message.id, error: 'Unknown method: ' + message.method });
               return;
             }
 
@@ -1513,12 +1985,12 @@
             Promise.resolve(handler(message.params || {}))
               .then(function(result) {
                 if (activeWs.readyState === 1) {
-                  activeWs.send(JSON.stringify({ id: message.id, result: result }));
+                  sendWsMessage(activeWs, { id: message.id, result: result }, { requestId: message.id });
                 }
               })
               .catch(function(err) {
                 if (activeWs.readyState === 1) {
-                  activeWs.send(JSON.stringify({ id: message.id, error: err.message || String(err) }));
+                  sendWsMessage(activeWs, { id: message.id, error: err.message || String(err) }, { requestId: message.id });
                 }
               });
           } catch (e) {
@@ -1559,7 +2031,10 @@
        * reach every MCP server instance so they all have current state.
        */
       function broadcastToAll(message) {
-        var json = JSON.stringify(message);
+        var json = window.__figmaBenchmarkEncode(message, {
+          scope: 'websocket-broadcast',
+          messageType: message && message.type ? message.type : null
+        });
         activeConnections.forEach(function(conn) {
           if (conn.ws.readyState === 1) {
             try { conn.ws.send(json); } catch(e) { /* ignore send errors */ }
@@ -2437,6 +2912,26 @@
       const msg = event.data.pluginMessage;
       if (!msg) return;
 
+      // A marker is sent separately from the real plugin message so the
+      // benchmark never changes the command result's shape. Ack immediately;
+      // code.js records the complete worker→UI→worker round trip.
+      if (msg.type === 'BENCHMARK_TRANSIT_START' && msg.data) {
+        var transitReceivedAt = window.__figmaBenchmark.now();
+        window.__figmaBenchmark.record('plugin-to-ui-postMessage-receive', transitReceivedAt, transitReceivedAt, {
+          scope: 'plugin-ui',
+          requestId: msg.data.requestId || null,
+          messageType: msg.data.messageType || null,
+          transitId: msg.data.transitId || null,
+          measurement: 'UI receive marker'
+        });
+        parent.postMessage({ pluginMessage: {
+          type: 'BENCHMARK_TRANSIT_ACK',
+          runId: msg.data.runId,
+          transitId: msg.data.transitId
+        } }, '*');
+        return;
+      }
+
       // Generic result handler
       const handleResult = (resultType, dataKey) => {
         const request = window.__figmaPendingRequests.get(msg.requestId);
@@ -2469,6 +2964,14 @@
 
       // Handle message types
       switch (msg.type) {
+        case 'BENCHMARK_CONTROL_RESULT':
+          handleResult('BENCHMARK_CONTROL', null);
+          window.__figmaBenchmark.handleControlResult(msg);
+          break;
+        case 'BENCHMARK_EXPORT_RESULT':
+          handleResult('BENCHMARK_EXPORT', null);
+          window.__figmaBenchmark.handleExportResult(msg);
+          break;
         case 'VARIABLES_DATA':
           window.__figmaVariablesData = msg.data;
           window.__figmaVariablesReady = true;
@@ -2784,6 +3287,11 @@
           break;
       }
     };
+
+    // Tell the worker when the iframe is ready so a later opt-in session can
+    // include the plugin-code-evaluation → UI-ready lifecycle entry.
+    parent.postMessage({ pluginMessage: { type: 'BENCHMARK_UI_READY' } }, '*');
+    updateBenchmarkControls();
   </script>
 </body>
 </html>

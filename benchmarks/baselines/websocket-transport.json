@@ -1,0 +1,2473 @@
+{
+  "schemaVersion": 1,
+  "suite": "websocket-transport",
+  "scenario": "transport-matrix",
+  "environment": {
+    "commit": "03cfdd7",
+    "dirty": true,
+    "os": "win32",
+    "arch": "x64",
+    "node": "v24.19.0",
+    "packageVersion": "1.40.0",
+    "cpu": "AMD Ryzen 7 7730U with Radeon Graphics",
+    "memoryMb": 38749,
+    "timestamp": "2026-09-04T09:29:18.512Z"
+  },
+  "configuration": {
+    "warmupRuns": 1,
+    "minimumMeasuredRuns": 20,
+    "commandTimeoutMs": 15000,
+    "portSelection": "OS-assigned",
+    "memoryScope": "benchmark process containing real bridge server and mock plugin",
+    "serializedByteDefinition": "UTF-8 bytes of JSON request and response payloads; excludes WebSocket frame overhead",
+    "garbageCollection": "explicit between scenarios",
+    "percentileMethod": "linear interpolation between adjacent ranks"
+  },
+  "scenarios": [
+    {
+      "name": "tiny-sequential",
+      "configuration": {
+        "warmupRuns": 1,
+        "measuredRuns": 20,
+        "concurrency": 1
+      },
+      "metrics": {
+        "roundTripMs": {
+          "median": 0.2382,
+          "p95": 0.5107,
+          "p99": 0.6977,
+          "min": 0.1814,
+          "max": 0.7445,
+          "mean": 0.2881,
+          "standardDeviation": 0.1365,
+          "coefficientOfVariation": 0.4737
+        },
+        "throughputOpsPerSecond": 3140.0132,
+        "wallMs": 6.3694,
+        "cpuMs": 0,
+        "requestBytes": {
+          "median": 119,
+          "p95": 119,
+          "p99": 119,
+          "min": 116,
+          "max": 119,
+          "mean": 117.7,
+          "standardDeviation": 1.4526,
+          "coefficientOfVariation": 0.0123
+        },
+        "responseBytes": {
+          "median": 98,
+          "p95": 98,
+          "p99": 98,
+          "min": 95,
+          "max": 98,
+          "mean": 96.7,
+          "standardDeviation": 1.4526,
+          "coefficientOfVariation": 0.015
+        },
+        "serializedBytes": {
+          "median": 217,
+          "p95": 217,
+          "p99": 217,
+          "min": 211,
+          "max": 217,
+          "mean": 214.4,
+          "standardDeviation": 2.9052,
+          "coefficientOfVariation": 0.0136
+        },
+        "heapDeltaMb": 0.1403,
+        "peakRssMb": 64.875
+      },
+      "samples": [
+        {
+          "iteration": 1,
+          "roundTripMs": 0.7445,
+          "requestBytes": 116,
+          "responseBytes": 95,
+          "serializedBytes": 211
+        },
+        {
+          "iteration": 2,
+          "roundTripMs": 0.4984,
+          "requestBytes": 116,
+          "responseBytes": 95,
+          "serializedBytes": 211
+        },
+        {
+          "iteration": 3,
+          "roundTripMs": 0.4537,
+          "requestBytes": 116,
+          "responseBytes": 95,
+          "serializedBytes": 211
+        },
+        {
+          "iteration": 4,
+          "roundTripMs": 0.3181,
+          "requestBytes": 116,
+          "responseBytes": 95,
+          "serializedBytes": 211
+        },
+        {
+          "iteration": 5,
+          "roundTripMs": 0.3507,
+          "requestBytes": 116,
+          "responseBytes": 95,
+          "serializedBytes": 211
+        },
+        {
+          "iteration": 6,
+          "roundTripMs": 0.3389,
+          "requestBytes": 116,
+          "responseBytes": 95,
+          "serializedBytes": 211
+        },
+        {
+          "iteration": 7,
+          "roundTripMs": 0.2727,
+          "requestBytes": 116,
+          "responseBytes": 95,
+          "serializedBytes": 211
+        },
+        {
+          "iteration": 8,
+          "roundTripMs": 0.2804,
+          "requestBytes": 116,
+          "responseBytes": 95,
+          "serializedBytes": 211
+        },
+        {
+          "iteration": 9,
+          "roundTripMs": 0.2581,
+          "requestBytes": 117,
+          "responseBytes": 96,
+          "serializedBytes": 213
+        },
+        {
+          "iteration": 10,
+          "roundTripMs": 0.2123,
+          "requestBytes": 119,
+          "responseBytes": 98,
+          "serializedBytes": 217
+        },
+        {
+          "iteration": 11,
+          "roundTripMs": 0.2688,
+          "requestBytes": 119,
+          "responseBytes": 98,
+          "serializedBytes": 217
+        },
+        {
+          "iteration": 12,
+          "roundTripMs": 0.2077,
+          "requestBytes": 119,
+          "responseBytes": 98,
+          "serializedBytes": 217
+        },
+        {
+          "iteration": 13,
+          "roundTripMs": 0.2183,
+          "requestBytes": 119,
+          "responseBytes": 98,
+          "serializedBytes": 217
+        },
+        {
+          "iteration": 14,
+          "roundTripMs": 0.2122,
+          "requestBytes": 119,
+          "responseBytes": 98,
+          "serializedBytes": 217
+        },
+        {
+          "iteration": 15,
+          "roundTripMs": 0.1996,
+          "requestBytes": 119,
+          "responseBytes": 98,
+          "serializedBytes": 217
+        },
+        {
+          "iteration": 16,
+          "roundTripMs": 0.1922,
+          "requestBytes": 119,
+          "responseBytes": 98,
+          "serializedBytes": 217
+        },
+        {
+          "iteration": 17,
+          "roundTripMs": 0.1877,
+          "requestBytes": 119,
+          "responseBytes": 98,
+          "serializedBytes": 217
+        },
+        {
+          "iteration": 18,
+          "roundTripMs": 0.1833,
+          "requestBytes": 119,
+          "responseBytes": 98,
+          "serializedBytes": 217
+        },
+        {
+          "iteration": 19,
+          "roundTripMs": 0.1825,
+          "requestBytes": 119,
+          "responseBytes": 98,
+          "serializedBytes": 217
+        },
+        {
+          "iteration": 20,
+          "roundTripMs": 0.1814,
+          "requestBytes": 119,
+          "responseBytes": 98,
+          "serializedBytes": 217
+        }
+      ]
+    },
+    {
+      "name": "tiny-concurrency-2",
+      "configuration": {
+        "warmupRuns": 1,
+        "measuredRuns": 20,
+        "concurrency": 2
+      },
+      "metrics": {
+        "roundTripMs": {
+          "median": 0.368,
+          "p95": 0.6827,
+          "p99": 0.9764,
+          "min": 0.2483,
+          "max": 1.0498,
+          "mean": 0.4212,
+          "standardDeviation": 0.1805,
+          "coefficientOfVariation": 0.4284
+        },
+        "throughputOpsPerSecond": 3975.7479,
+        "wallMs": 5.0305,
+        "cpuMs": 0,
+        "requestBytes": {
+          "median": 122,
+          "p95": 122,
+          "p99": 122,
+          "min": 120,
+          "max": 122,
+          "mean": 121.1,
+          "standardDeviation": 0.995,
+          "coefficientOfVariation": 0.0082
+        },
+        "responseBytes": {
+          "median": 101,
+          "p95": 101,
+          "p99": 101,
+          "min": 99,
+          "max": 101,
+          "mean": 100.1,
+          "standardDeviation": 0.995,
+          "coefficientOfVariation": 0.0099
+        },
+        "serializedBytes": {
+          "median": 223,
+          "p95": 223,
+          "p99": 223,
+          "min": 219,
+          "max": 223,
+          "mean": 221.2,
+          "standardDeviation": 1.99,
+          "coefficientOfVariation": 0.009
+        },
+        "heapDeltaMb": 0.0051,
+        "peakRssMb": 65.0039
+      },
+      "samples": [
+        {
+          "iteration": 1,
+          "roundTripMs": 1.0498,
+          "requestBytes": 120,
+          "responseBytes": 99,
+          "serializedBytes": 219
+        },
+        {
+          "iteration": 2,
+          "roundTripMs": 0.6634,
+          "requestBytes": 120,
+          "responseBytes": 99,
+          "serializedBytes": 219
+        },
+        {
+          "iteration": 3,
+          "roundTripMs": 0.4059,
+          "requestBytes": 120,
+          "responseBytes": 99,
+          "serializedBytes": 219
+        },
+        {
+          "iteration": 4,
+          "roundTripMs": 0.3188,
+          "requestBytes": 120,
+          "responseBytes": 99,
+          "serializedBytes": 219
+        },
+        {
+          "iteration": 5,
+          "roundTripMs": 0.4423,
+          "requestBytes": 120,
+          "responseBytes": 99,
+          "serializedBytes": 219
+        },
+        {
+          "iteration": 6,
+          "roundTripMs": 0.387,
+          "requestBytes": 120,
+          "responseBytes": 99,
+          "serializedBytes": 219
+        },
+        {
+          "iteration": 7,
+          "roundTripMs": 0.4627,
+          "requestBytes": 120,
+          "responseBytes": 99,
+          "serializedBytes": 219
+        },
+        {
+          "iteration": 8,
+          "roundTripMs": 0.3866,
+          "requestBytes": 120,
+          "responseBytes": 99,
+          "serializedBytes": 219
+        },
+        {
+          "iteration": 9,
+          "roundTripMs": 0.6183,
+          "requestBytes": 120,
+          "responseBytes": 99,
+          "serializedBytes": 219
+        },
+        {
+          "iteration": 10,
+          "roundTripMs": 0.5416,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 11,
+          "roundTripMs": 0.3442,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 12,
+          "roundTripMs": 0.2729,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 13,
+          "roundTripMs": 0.3779,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 14,
+          "roundTripMs": 0.3241,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 15,
+          "roundTripMs": 0.3581,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 16,
+          "roundTripMs": 0.2842,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 17,
+          "roundTripMs": 0.3442,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 18,
+          "roundTripMs": 0.2901,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 19,
+          "roundTripMs": 0.3034,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 20,
+          "roundTripMs": 0.2483,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        }
+      ]
+    },
+    {
+      "name": "tiny-concurrency-8",
+      "configuration": {
+        "warmupRuns": 1,
+        "measuredRuns": 32,
+        "concurrency": 8
+      },
+      "metrics": {
+        "roundTripMs": {
+          "median": 0.8829,
+          "p95": 1.2456,
+          "p99": 1.3988,
+          "min": 0.5686,
+          "max": 1.4527,
+          "mean": 0.9216,
+          "standardDeviation": 0.2059,
+          "coefficientOfVariation": 0.2234
+        },
+        "throughputOpsPerSecond": 6450.0524,
+        "wallMs": 4.9612,
+        "cpuMs": 15,
+        "requestBytes": {
+          "median": 122,
+          "p95": 122,
+          "p99": 122,
+          "min": 120,
+          "max": 122,
+          "mean": 121.4375,
+          "standardDeviation": 0.8992,
+          "coefficientOfVariation": 0.0074
+        },
+        "responseBytes": {
+          "median": 101,
+          "p95": 101,
+          "p99": 101,
+          "min": 99,
+          "max": 101,
+          "mean": 100.4375,
+          "standardDeviation": 0.8992,
+          "coefficientOfVariation": 0.009
+        },
+        "serializedBytes": {
+          "median": 223,
+          "p95": 223,
+          "p99": 223,
+          "min": 219,
+          "max": 223,
+          "mean": 221.875,
+          "standardDeviation": 1.7984,
+          "coefficientOfVariation": 0.0081
+        },
+        "heapDeltaMb": 0.0248,
+        "peakRssMb": 65.043
+      },
+      "samples": [
+        {
+          "iteration": 1,
+          "roundTripMs": 1.4527,
+          "requestBytes": 120,
+          "responseBytes": 99,
+          "serializedBytes": 219
+        },
+        {
+          "iteration": 2,
+          "roundTripMs": 1.1408,
+          "requestBytes": 120,
+          "responseBytes": 99,
+          "serializedBytes": 219
+        },
+        {
+          "iteration": 3,
+          "roundTripMs": 1.0543,
+          "requestBytes": 120,
+          "responseBytes": 99,
+          "serializedBytes": 219
+        },
+        {
+          "iteration": 4,
+          "roundTripMs": 0.9941,
+          "requestBytes": 120,
+          "responseBytes": 99,
+          "serializedBytes": 219
+        },
+        {
+          "iteration": 5,
+          "roundTripMs": 0.947,
+          "requestBytes": 120,
+          "responseBytes": 99,
+          "serializedBytes": 219
+        },
+        {
+          "iteration": 6,
+          "roundTripMs": 0.8935,
+          "requestBytes": 120,
+          "responseBytes": 99,
+          "serializedBytes": 219
+        },
+        {
+          "iteration": 7,
+          "roundTripMs": 0.8444,
+          "requestBytes": 120,
+          "responseBytes": 99,
+          "serializedBytes": 219
+        },
+        {
+          "iteration": 8,
+          "roundTripMs": 0.8024,
+          "requestBytes": 120,
+          "responseBytes": 99,
+          "serializedBytes": 219
+        },
+        {
+          "iteration": 9,
+          "roundTripMs": 1.2787,
+          "requestBytes": 120,
+          "responseBytes": 99,
+          "serializedBytes": 219
+        },
+        {
+          "iteration": 10,
+          "roundTripMs": 1.2185,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 11,
+          "roundTripMs": 1.1747,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 12,
+          "roundTripMs": 1.1266,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 13,
+          "roundTripMs": 1.0421,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 14,
+          "roundTripMs": 0.9653,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 15,
+          "roundTripMs": 0.8619,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 16,
+          "roundTripMs": 0.783,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 17,
+          "roundTripMs": 0.8723,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 18,
+          "roundTripMs": 0.8069,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 19,
+          "roundTripMs": 0.7638,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 20,
+          "roundTripMs": 0.7221,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 21,
+          "roundTripMs": 0.683,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 22,
+          "roundTripMs": 0.6432,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 23,
+          "roundTripMs": 0.6047,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 24,
+          "roundTripMs": 0.5686,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 25,
+          "roundTripMs": 1.1218,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 26,
+          "roundTripMs": 1.0686,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 27,
+          "roundTripMs": 1.0299,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 28,
+          "roundTripMs": 0.9496,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 29,
+          "roundTripMs": 0.8557,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 30,
+          "roundTripMs": 0.7847,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 31,
+          "roundTripMs": 0.7368,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        },
+        {
+          "iteration": 32,
+          "roundTripMs": 0.6979,
+          "requestBytes": 122,
+          "responseBytes": 101,
+          "serializedBytes": 223
+        }
+      ]
+    },
+    {
+      "name": "tiny-concurrency-32",
+      "configuration": {
+        "warmupRuns": 1,
+        "measuredRuns": 128,
+        "concurrency": 32
+      },
+      "metrics": {
+        "roundTripMs": {
+          "median": 2.5466,
+          "p95": 3.3507,
+          "p99": 3.5874,
+          "min": 1.8854,
+          "max": 3.7543,
+          "mean": 2.5924,
+          "standardDeviation": 0.4234,
+          "coefficientOfVariation": 0.1633
+        },
+        "throughputOpsPerSecond": 9137.1138,
+        "wallMs": 14.0088,
+        "cpuMs": 16,
+        "requestBytes": {
+          "median": 124,
+          "p95": 126,
+          "p99": 126,
+          "min": 121,
+          "max": 126,
+          "mean": 124.1328,
+          "standardDeviation": 1.277,
+          "coefficientOfVariation": 0.0103
+        },
+        "responseBytes": {
+          "median": 103,
+          "p95": 105,
+          "p99": 105,
+          "min": 100,
+          "max": 105,
+          "mean": 103.1328,
+          "standardDeviation": 1.277,
+          "coefficientOfVariation": 0.0124
+        },
+        "serializedBytes": {
+          "median": 227,
+          "p95": 231,
+          "p99": 231,
+          "min": 221,
+          "max": 231,
+          "mean": 227.2656,
+          "standardDeviation": 2.5541,
+          "coefficientOfVariation": 0.0112
+        },
+        "heapDeltaMb": 0.2756,
+        "peakRssMb": 65.2813
+      },
+      "samples": [
+        {
+          "iteration": 1,
+          "roundTripMs": 3.7543,
+          "requestBytes": 121,
+          "responseBytes": 100,
+          "serializedBytes": 221
+        },
+        {
+          "iteration": 2,
+          "roundTripMs": 3.4257,
+          "requestBytes": 121,
+          "responseBytes": 100,
+          "serializedBytes": 221
+        },
+        {
+          "iteration": 3,
+          "roundTripMs": 3.3231,
+          "requestBytes": 121,
+          "responseBytes": 100,
+          "serializedBytes": 221
+        },
+        {
+          "iteration": 4,
+          "roundTripMs": 3.2695,
+          "requestBytes": 121,
+          "responseBytes": 100,
+          "serializedBytes": 221
+        },
+        {
+          "iteration": 5,
+          "roundTripMs": 3.2269,
+          "requestBytes": 121,
+          "responseBytes": 100,
+          "serializedBytes": 221
+        },
+        {
+          "iteration": 6,
+          "roundTripMs": 3.1847,
+          "requestBytes": 121,
+          "responseBytes": 100,
+          "serializedBytes": 221
+        },
+        {
+          "iteration": 7,
+          "roundTripMs": 3.1466,
+          "requestBytes": 121,
+          "responseBytes": 100,
+          "serializedBytes": 221
+        },
+        {
+          "iteration": 8,
+          "roundTripMs": 3.0679,
+          "requestBytes": 121,
+          "responseBytes": 100,
+          "serializedBytes": 221
+        },
+        {
+          "iteration": 9,
+          "roundTripMs": 3.0271,
+          "requestBytes": 121,
+          "responseBytes": 100,
+          "serializedBytes": 221
+        },
+        {
+          "iteration": 10,
+          "roundTripMs": 2.983,
+          "requestBytes": 123,
+          "responseBytes": 102,
+          "serializedBytes": 225
+        },
+        {
+          "iteration": 11,
+          "roundTripMs": 2.9284,
+          "requestBytes": 123,
+          "responseBytes": 102,
+          "serializedBytes": 225
+        },
+        {
+          "iteration": 12,
+          "roundTripMs": 2.8805,
+          "requestBytes": 123,
+          "responseBytes": 102,
+          "serializedBytes": 225
+        },
+        {
+          "iteration": 13,
+          "roundTripMs": 2.8407,
+          "requestBytes": 123,
+          "responseBytes": 102,
+          "serializedBytes": 225
+        },
+        {
+          "iteration": 14,
+          "roundTripMs": 2.7892,
+          "requestBytes": 123,
+          "responseBytes": 102,
+          "serializedBytes": 225
+        },
+        {
+          "iteration": 15,
+          "roundTripMs": 2.7499,
+          "requestBytes": 123,
+          "responseBytes": 102,
+          "serializedBytes": 225
+        },
+        {
+          "iteration": 16,
+          "roundTripMs": 2.7111,
+          "requestBytes": 123,
+          "responseBytes": 102,
+          "serializedBytes": 225
+        },
+        {
+          "iteration": 17,
+          "roundTripMs": 2.6726,
+          "requestBytes": 123,
+          "responseBytes": 102,
+          "serializedBytes": 225
+        },
+        {
+          "iteration": 18,
+          "roundTripMs": 2.6272,
+          "requestBytes": 123,
+          "responseBytes": 102,
+          "serializedBytes": 225
+        },
+        {
+          "iteration": 19,
+          "roundTripMs": 2.5874,
+          "requestBytes": 123,
+          "responseBytes": 102,
+          "serializedBytes": 225
+        },
+        {
+          "iteration": 20,
+          "roundTripMs": 2.5496,
+          "requestBytes": 123,
+          "responseBytes": 102,
+          "serializedBytes": 225
+        },
+        {
+          "iteration": 21,
+          "roundTripMs": 2.5112,
+          "requestBytes": 123,
+          "responseBytes": 102,
+          "serializedBytes": 225
+        },
+        {
+          "iteration": 22,
+          "roundTripMs": 2.4688,
+          "requestBytes": 123,
+          "responseBytes": 102,
+          "serializedBytes": 225
+        },
+        {
+          "iteration": 23,
+          "roundTripMs": 2.4315,
+          "requestBytes": 123,
+          "responseBytes": 102,
+          "serializedBytes": 225
+        },
+        {
+          "iteration": 24,
+          "roundTripMs": 2.3865,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 25,
+          "roundTripMs": 2.3495,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 26,
+          "roundTripMs": 2.3071,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 27,
+          "roundTripMs": 2.2702,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 28,
+          "roundTripMs": 2.233,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 29,
+          "roundTripMs": 2.1969,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 30,
+          "roundTripMs": 2.1528,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 31,
+          "roundTripMs": 2.1161,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 32,
+          "roundTripMs": 2.0796,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 33,
+          "roundTripMs": 3.1079,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 34,
+          "roundTripMs": 3.0466,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 35,
+          "roundTripMs": 3.0064,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 36,
+          "roundTripMs": 2.9681,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 37,
+          "roundTripMs": 2.9157,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 38,
+          "roundTripMs": 2.8725,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 39,
+          "roundTripMs": 2.836,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 40,
+          "roundTripMs": 2.8002,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 41,
+          "roundTripMs": 2.7657,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 42,
+          "roundTripMs": 2.7162,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 43,
+          "roundTripMs": 2.6771,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 44,
+          "roundTripMs": 2.641,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 45,
+          "roundTripMs": 2.6053,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 46,
+          "roundTripMs": 2.5684,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 47,
+          "roundTripMs": 2.5332,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 48,
+          "roundTripMs": 2.4985,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 49,
+          "roundTripMs": 2.4633,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 50,
+          "roundTripMs": 2.4276,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 51,
+          "roundTripMs": 2.3924,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 52,
+          "roundTripMs": 2.3576,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 53,
+          "roundTripMs": 2.3236,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 54,
+          "roundTripMs": 2.288,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 55,
+          "roundTripMs": 2.2133,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 56,
+          "roundTripMs": 2.1704,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 57,
+          "roundTripMs": 2.135,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 58,
+          "roundTripMs": 2.1016,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 59,
+          "roundTripMs": 2.0674,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 60,
+          "roundTripMs": 2.0331,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 61,
+          "roundTripMs": 1.9901,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 62,
+          "roundTripMs": 1.9555,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 63,
+          "roundTripMs": 1.9207,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 64,
+          "roundTripMs": 1.8854,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 65,
+          "roundTripMs": 2.9442,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 66,
+          "roundTripMs": 2.9033,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 67,
+          "roundTripMs": 2.8696,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 68,
+          "roundTripMs": 2.8376,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 69,
+          "roundTripMs": 2.8066,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 70,
+          "roundTripMs": 2.7737,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 71,
+          "roundTripMs": 2.7423,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 72,
+          "roundTripMs": 2.7102,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 73,
+          "roundTripMs": 2.6789,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 74,
+          "roundTripMs": 2.6446,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 75,
+          "roundTripMs": 2.6085,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 76,
+          "roundTripMs": 2.5739,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 77,
+          "roundTripMs": 2.5436,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 78,
+          "roundTripMs": 2.5121,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 79,
+          "roundTripMs": 2.4803,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 80,
+          "roundTripMs": 2.4492,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 81,
+          "roundTripMs": 2.4179,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 82,
+          "roundTripMs": 2.3844,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 83,
+          "roundTripMs": 2.3535,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 84,
+          "roundTripMs": 2.3226,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 85,
+          "roundTripMs": 2.293,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 86,
+          "roundTripMs": 2.2629,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 87,
+          "roundTripMs": 2.2319,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 88,
+          "roundTripMs": 2.202,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 89,
+          "roundTripMs": 2.2002,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 90,
+          "roundTripMs": 2.1736,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 91,
+          "roundTripMs": 2.141,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 92,
+          "roundTripMs": 2.1091,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 93,
+          "roundTripMs": 2.0691,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 94,
+          "roundTripMs": 2.0369,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 95,
+          "roundTripMs": 2.0041,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 96,
+          "roundTripMs": 1.9728,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 97,
+          "roundTripMs": 3.6135,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 98,
+          "roundTripMs": 3.5167,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 99,
+          "roundTripMs": 3.4739,
+          "requestBytes": 124,
+          "responseBytes": 103,
+          "serializedBytes": 227
+        },
+        {
+          "iteration": 100,
+          "roundTripMs": 3.4279,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 101,
+          "roundTripMs": 3.3655,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 102,
+          "roundTripMs": 3.3154,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 103,
+          "roundTripMs": 3.2683,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 104,
+          "roundTripMs": 3.2223,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 105,
+          "roundTripMs": 3.1732,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 106,
+          "roundTripMs": 3.0952,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 107,
+          "roundTripMs": 3.0322,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 108,
+          "roundTripMs": 2.9468,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 109,
+          "roundTripMs": 2.8837,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 110,
+          "roundTripMs": 2.8364,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 111,
+          "roundTripMs": 2.7865,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 112,
+          "roundTripMs": 2.737,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 113,
+          "roundTripMs": 2.6875,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 114,
+          "roundTripMs": 2.5976,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 115,
+          "roundTripMs": 2.5386,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 116,
+          "roundTripMs": 2.4784,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 117,
+          "roundTripMs": 2.3993,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 118,
+          "roundTripMs": 2.3535,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 119,
+          "roundTripMs": 2.2928,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 120,
+          "roundTripMs": 2.2478,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 121,
+          "roundTripMs": 2.2086,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 122,
+          "roundTripMs": 2.1758,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 123,
+          "roundTripMs": 2.1411,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 124,
+          "roundTripMs": 2.125,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 125,
+          "roundTripMs": 2.0783,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 126,
+          "roundTripMs": 2.0426,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 127,
+          "roundTripMs": 2.0081,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        },
+        {
+          "iteration": 128,
+          "roundTripMs": 1.974,
+          "requestBytes": 126,
+          "responseBytes": 105,
+          "serializedBytes": 231
+        }
+      ]
+    },
+    {
+      "name": "json-response-100kb",
+      "configuration": {
+        "warmupRuns": 1,
+        "measuredRuns": 20,
+        "concurrency": 1,
+        "targetResponseBytes": 102400
+      },
+      "metrics": {
+        "roundTripMs": {
+          "median": 0.9889,
+          "p95": 1.3362,
+          "p99": 1.651,
+          "min": 0.8036,
+          "max": 1.7297,
+          "mean": 1.0225,
+          "standardDeviation": 0.2049,
+          "coefficientOfVariation": 0.2004
+        },
+        "throughputOpsPerSecond": 962.5102,
+        "wallMs": 20.779,
+        "cpuMs": 16,
+        "requestBytes": {
+          "median": 124,
+          "p95": 124,
+          "p99": 124,
+          "min": 122,
+          "max": 124,
+          "mean": 123.1,
+          "standardDeviation": 0.995,
+          "coefficientOfVariation": 0.0081
+        },
+        "responseBytes": {
+          "median": 102400,
+          "p95": 102400,
+          "p99": 102400,
+          "min": 102400,
+          "max": 102400,
+          "mean": 102400,
+          "standardDeviation": 0,
+          "coefficientOfVariation": 0
+        },
+        "serializedBytes": {
+          "median": 102524,
+          "p95": 102524,
+          "p99": 102524,
+          "min": 102522,
+          "max": 102524,
+          "mean": 102523.1,
+          "standardDeviation": 0.995,
+          "coefficientOfVariation": 0
+        },
+        "heapDeltaMb": 0.0183,
+        "peakRssMb": 70.832
+      },
+      "samples": [
+        {
+          "iteration": 1,
+          "roundTripMs": 1.3155,
+          "requestBytes": 122,
+          "responseBytes": 102400,
+          "serializedBytes": 102522
+        },
+        {
+          "iteration": 2,
+          "roundTripMs": 1.0023,
+          "requestBytes": 122,
+          "responseBytes": 102400,
+          "serializedBytes": 102522
+        },
+        {
+          "iteration": 3,
+          "roundTripMs": 0.9895,
+          "requestBytes": 122,
+          "responseBytes": 102400,
+          "serializedBytes": 102522
+        },
+        {
+          "iteration": 4,
+          "roundTripMs": 0.9882,
+          "requestBytes": 122,
+          "responseBytes": 102400,
+          "serializedBytes": 102522
+        },
+        {
+          "iteration": 5,
+          "roundTripMs": 1.0568,
+          "requestBytes": 122,
+          "responseBytes": 102400,
+          "serializedBytes": 102522
+        },
+        {
+          "iteration": 6,
+          "roundTripMs": 1.0815,
+          "requestBytes": 122,
+          "responseBytes": 102400,
+          "serializedBytes": 102522
+        },
+        {
+          "iteration": 7,
+          "roundTripMs": 1.0174,
+          "requestBytes": 122,
+          "responseBytes": 102400,
+          "serializedBytes": 102522
+        },
+        {
+          "iteration": 8,
+          "roundTripMs": 1.1936,
+          "requestBytes": 122,
+          "responseBytes": 102400,
+          "serializedBytes": 102522
+        },
+        {
+          "iteration": 9,
+          "roundTripMs": 1.7297,
+          "requestBytes": 122,
+          "responseBytes": 102400,
+          "serializedBytes": 102522
+        },
+        {
+          "iteration": 10,
+          "roundTripMs": 0.9246,
+          "requestBytes": 124,
+          "responseBytes": 102400,
+          "serializedBytes": 102524
+        },
+        {
+          "iteration": 11,
+          "roundTripMs": 0.8518,
+          "requestBytes": 124,
+          "responseBytes": 102400,
+          "serializedBytes": 102524
+        },
+        {
+          "iteration": 12,
+          "roundTripMs": 0.8948,
+          "requestBytes": 124,
+          "responseBytes": 102400,
+          "serializedBytes": 102524
+        },
+        {
+          "iteration": 13,
+          "roundTripMs": 0.946,
+          "requestBytes": 124,
+          "responseBytes": 102400,
+          "serializedBytes": 102524
+        },
+        {
+          "iteration": 14,
+          "roundTripMs": 0.9267,
+          "requestBytes": 124,
+          "responseBytes": 102400,
+          "serializedBytes": 102524
+        },
+        {
+          "iteration": 15,
+          "roundTripMs": 0.9216,
+          "requestBytes": 124,
+          "responseBytes": 102400,
+          "serializedBytes": 102524
+        },
+        {
+          "iteration": 16,
+          "roundTripMs": 1.132,
+          "requestBytes": 124,
+          "responseBytes": 102400,
+          "serializedBytes": 102524
+        },
+        {
+          "iteration": 17,
+          "roundTripMs": 1.021,
+          "requestBytes": 124,
+          "responseBytes": 102400,
+          "serializedBytes": 102524
+        },
+        {
+          "iteration": 18,
+          "roundTripMs": 0.8036,
+          "requestBytes": 124,
+          "responseBytes": 102400,
+          "serializedBytes": 102524
+        },
+        {
+          "iteration": 19,
+          "roundTripMs": 0.8198,
+          "requestBytes": 124,
+          "responseBytes": 102400,
+          "serializedBytes": 102524
+        },
+        {
+          "iteration": 20,
+          "roundTripMs": 0.834,
+          "requestBytes": 124,
+          "responseBytes": 102400,
+          "serializedBytes": 102524
+        }
+      ]
+    },
+    {
+      "name": "json-response-1mb",
+      "configuration": {
+        "warmupRuns": 1,
+        "measuredRuns": 20,
+        "concurrency": 1,
+        "targetResponseBytes": 1048576
+      },
+      "metrics": {
+        "roundTripMs": {
+          "median": 9.8872,
+          "p95": 17.8462,
+          "p99": 22.0456,
+          "min": 7.2528,
+          "max": 23.0955,
+          "mean": 11.2577,
+          "standardDeviation": 3.7379,
+          "coefficientOfVariation": 0.332
+        },
+        "throughputOpsPerSecond": 88.4556,
+        "wallMs": 226.1021,
+        "cpuMs": 281,
+        "requestBytes": {
+          "median": 122,
+          "p95": 122,
+          "p99": 122,
+          "min": 120,
+          "max": 122,
+          "mean": 121.1,
+          "standardDeviation": 0.995,
+          "coefficientOfVariation": 0.0082
+        },
+        "responseBytes": {
+          "median": 1048576,
+          "p95": 1048576,
+          "p99": 1048576,
+          "min": 1048576,
+          "max": 1048576,
+          "mean": 1048576,
+          "standardDeviation": 0,
+          "coefficientOfVariation": 0
+        },
+        "serializedBytes": {
+          "median": 1048698,
+          "p95": 1048698,
+          "p99": 1048698,
+          "min": 1048696,
+          "max": 1048698,
+          "mean": 1048697.1,
+          "standardDeviation": 0.995,
+          "coefficientOfVariation": 0
+        },
+        "heapDeltaMb": 0.0732,
+        "peakRssMb": 102.5391
+      },
+      "samples": [
+        {
+          "iteration": 1,
+          "roundTripMs": 12.5052,
+          "requestBytes": 120,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048696
+        },
+        {
+          "iteration": 2,
+          "roundTripMs": 13.3609,
+          "requestBytes": 120,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048696
+        },
+        {
+          "iteration": 3,
+          "roundTripMs": 11.3853,
+          "requestBytes": 120,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048696
+        },
+        {
+          "iteration": 4,
+          "roundTripMs": 13.4501,
+          "requestBytes": 120,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048696
+        },
+        {
+          "iteration": 5,
+          "roundTripMs": 13.3971,
+          "requestBytes": 120,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048696
+        },
+        {
+          "iteration": 6,
+          "roundTripMs": 23.0955,
+          "requestBytes": 120,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048696
+        },
+        {
+          "iteration": 7,
+          "roundTripMs": 10.6325,
+          "requestBytes": 120,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048696
+        },
+        {
+          "iteration": 8,
+          "roundTripMs": 8.6663,
+          "requestBytes": 120,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048696
+        },
+        {
+          "iteration": 9,
+          "roundTripMs": 17.5699,
+          "requestBytes": 120,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048696
+        },
+        {
+          "iteration": 10,
+          "roundTripMs": 8.5274,
+          "requestBytes": 122,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048698
+        },
+        {
+          "iteration": 11,
+          "roundTripMs": 8.8196,
+          "requestBytes": 122,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048698
+        },
+        {
+          "iteration": 12,
+          "roundTripMs": 8.3306,
+          "requestBytes": 122,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048698
+        },
+        {
+          "iteration": 13,
+          "roundTripMs": 7.9376,
+          "requestBytes": 122,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048698
+        },
+        {
+          "iteration": 14,
+          "roundTripMs": 7.2528,
+          "requestBytes": 122,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048698
+        },
+        {
+          "iteration": 15,
+          "roundTripMs": 8.7842,
+          "requestBytes": 122,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048698
+        },
+        {
+          "iteration": 16,
+          "roundTripMs": 8.944,
+          "requestBytes": 122,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048698
+        },
+        {
+          "iteration": 17,
+          "roundTripMs": 9.5826,
+          "requestBytes": 122,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048698
+        },
+        {
+          "iteration": 18,
+          "roundTripMs": 13.8618,
+          "requestBytes": 122,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048698
+        },
+        {
+          "iteration": 19,
+          "roundTripMs": 8.8592,
+          "requestBytes": 122,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048698
+        },
+        {
+          "iteration": 20,
+          "roundTripMs": 10.1917,
+          "requestBytes": 122,
+          "responseBytes": 1048576,
+          "serializedBytes": 1048698
+        }
+      ]
+    },
+    {
+      "name": "json-response-10mb",
+      "configuration": {
+        "warmupRuns": 1,
+        "measuredRuns": 20,
+        "concurrency": 1,
+        "targetResponseBytes": 10485760
+      },
+      "metrics": {
+        "roundTripMs": {
+          "median": 66.7533,
+          "p95": 86.2904,
+          "p99": 87.0768,
+          "min": 62.8788,
+          "max": 87.2734,
+          "mean": 69.6278,
+          "standardDeviation": 7.0332,
+          "coefficientOfVariation": 0.101
+        },
+        "throughputOpsPerSecond": 14.3529,
+        "wallMs": 1393.4445,
+        "cpuMs": 1610,
+        "requestBytes": {
+          "median": 123,
+          "p95": 123,
+          "p99": 123,
+          "min": 121,
+          "max": 123,
+          "mean": 122.1,
+          "standardDeviation": 0.995,
+          "coefficientOfVariation": 0.0081
+        },
+        "responseBytes": {
+          "median": 10485760,
+          "p95": 10485760,
+          "p99": 10485760,
+          "min": 10485760,
+          "max": 10485760,
+          "mean": 10485760,
+          "standardDeviation": 0,
+          "coefficientOfVariation": 0
+        },
+        "serializedBytes": {
+          "median": 10485883,
+          "p95": 10485883,
+          "p99": 10485883,
+          "min": 10485881,
+          "max": 10485883,
+          "mean": 10485882.1,
+          "standardDeviation": 0.995,
+          "coefficientOfVariation": 0
+        },
+        "heapDeltaMb": -1.3927,
+        "peakRssMb": 293.2188
+      },
+      "samples": [
+        {
+          "iteration": 1,
+          "roundTripMs": 86.2387,
+          "requestBytes": 121,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485881
+        },
+        {
+          "iteration": 2,
+          "roundTripMs": 87.2734,
+          "requestBytes": 121,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485881
+        },
+        {
+          "iteration": 3,
+          "roundTripMs": 66.9278,
+          "requestBytes": 121,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485881
+        },
+        {
+          "iteration": 4,
+          "roundTripMs": 74.3847,
+          "requestBytes": 121,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485881
+        },
+        {
+          "iteration": 5,
+          "roundTripMs": 64.2942,
+          "requestBytes": 121,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485881
+        },
+        {
+          "iteration": 6,
+          "roundTripMs": 65.4454,
+          "requestBytes": 121,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485881
+        },
+        {
+          "iteration": 7,
+          "roundTripMs": 75.1732,
+          "requestBytes": 121,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485881
+        },
+        {
+          "iteration": 8,
+          "roundTripMs": 64.6662,
+          "requestBytes": 121,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485881
+        },
+        {
+          "iteration": 9,
+          "roundTripMs": 77.9758,
+          "requestBytes": 121,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485881
+        },
+        {
+          "iteration": 10,
+          "roundTripMs": 63.9469,
+          "requestBytes": 123,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485883
+        },
+        {
+          "iteration": 11,
+          "roundTripMs": 69.8821,
+          "requestBytes": 123,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485883
+        },
+        {
+          "iteration": 12,
+          "roundTripMs": 66.5787,
+          "requestBytes": 123,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485883
+        },
+        {
+          "iteration": 13,
+          "roundTripMs": 68.5388,
+          "requestBytes": 123,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485883
+        },
+        {
+          "iteration": 14,
+          "roundTripMs": 64.9696,
+          "requestBytes": 123,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485883
+        },
+        {
+          "iteration": 15,
+          "roundTripMs": 62.9899,
+          "requestBytes": 123,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485883
+        },
+        {
+          "iteration": 16,
+          "roundTripMs": 71.146,
+          "requestBytes": 123,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485883
+        },
+        {
+          "iteration": 17,
+          "roundTripMs": 65.8326,
+          "requestBytes": 123,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485883
+        },
+        {
+          "iteration": 18,
+          "roundTripMs": 69.2775,
+          "requestBytes": 123,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485883
+        },
+        {
+          "iteration": 19,
+          "roundTripMs": 62.8788,
+          "requestBytes": 123,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485883
+        },
+        {
+          "iteration": 20,
+          "roundTripMs": 64.1364,
+          "requestBytes": 123,
+          "responseBytes": 10485760,
+          "serializedBytes": 10485883
+        }
+      ]
+    },
+    {
+      "name": "variables-response",
+      "configuration": {
+        "warmupRuns": 1,
+        "measuredRuns": 20,
+        "concurrency": 1,
+        "fixtureVersion": 1,
+        "fixtureBytes": 65884,
+        "variableCount": 120,
+        "collectionCount": 3
+      },
+      "metrics": {
+        "roundTripMs": {
+          "median": 0.8235,
+          "p95": 1.0285,
+          "p99": 1.0836,
+          "min": 0.7615,
+          "max": 1.0974,
+          "mean": 0.8535,
+          "standardDeviation": 0.0907,
+          "coefficientOfVariation": 0.1063
+        },
+        "throughputOpsPerSecond": 1152.2596,
+        "wallMs": 17.3572,
+        "cpuMs": 31,
+        "requestBytes": {
+          "median": 123,
+          "p95": 123,
+          "p99": 123,
+          "min": 121,
+          "max": 123,
+          "mean": 122.1,
+          "standardDeviation": 0.995,
+          "coefficientOfVariation": 0.0081
+        },
+        "responseBytes": {
+          "median": 65961,
+          "p95": 65961,
+          "p99": 65961,
+          "min": 65960,
+          "max": 65961,
+          "mean": 65960.55,
+          "standardDeviation": 0.4975,
+          "coefficientOfVariation": 0
+        },
+        "serializedBytes": {
+          "median": 66084,
+          "p95": 66084,
+          "p99": 66084,
+          "min": 66081,
+          "max": 66084,
+          "mean": 66082.65,
+          "standardDeviation": 1.4925,
+          "coefficientOfVariation": 0
+        },
+        "heapDeltaMb": 0.0025,
+        "peakRssMb": 78.0625
+      },
+      "samples": [
+        {
+          "iteration": 1,
+          "roundTripMs": 1.0249,
+          "requestBytes": 121,
+          "responseBytes": 65960,
+          "serializedBytes": 66081
+        },
+        {
+          "iteration": 2,
+          "roundTripMs": 0.7915,
+          "requestBytes": 121,
+          "responseBytes": 65960,
+          "serializedBytes": 66081
+        },
+        {
+          "iteration": 3,
+          "roundTripMs": 0.8467,
+          "requestBytes": 121,
+          "responseBytes": 65960,
+          "serializedBytes": 66081
+        },
+        {
+          "iteration": 4,
+          "roundTripMs": 0.7949,
+          "requestBytes": 121,
+          "responseBytes": 65960,
+          "serializedBytes": 66081
+        },
+        {
+          "iteration": 5,
+          "roundTripMs": 0.8707,
+          "requestBytes": 121,
+          "responseBytes": 65960,
+          "serializedBytes": 66081
+        },
+        {
+          "iteration": 6,
+          "roundTripMs": 0.775,
+          "requestBytes": 121,
+          "responseBytes": 65960,
+          "serializedBytes": 66081
+        },
+        {
+          "iteration": 7,
+          "roundTripMs": 0.7619,
+          "requestBytes": 121,
+          "responseBytes": 65960,
+          "serializedBytes": 66081
+        },
+        {
+          "iteration": 8,
+          "roundTripMs": 0.7916,
+          "requestBytes": 121,
+          "responseBytes": 65960,
+          "serializedBytes": 66081
+        },
+        {
+          "iteration": 9,
+          "roundTripMs": 0.7866,
+          "requestBytes": 121,
+          "responseBytes": 65960,
+          "serializedBytes": 66081
+        },
+        {
+          "iteration": 10,
+          "roundTripMs": 0.8025,
+          "requestBytes": 123,
+          "responseBytes": 65961,
+          "serializedBytes": 66084
+        },
+        {
+          "iteration": 11,
+          "roundTripMs": 0.7615,
+          "requestBytes": 123,
+          "responseBytes": 65961,
+          "serializedBytes": 66084
+        },
+        {
+          "iteration": 12,
+          "roundTripMs": 0.7902,
+          "requestBytes": 123,
+          "responseBytes": 65961,
+          "serializedBytes": 66084
+        },
+        {
+          "iteration": 13,
+          "roundTripMs": 0.8533,
+          "requestBytes": 123,
+          "responseBytes": 65961,
+          "serializedBytes": 66084
+        },
+        {
+          "iteration": 14,
+          "roundTripMs": 1.0002,
+          "requestBytes": 123,
+          "responseBytes": 65961,
+          "serializedBytes": 66084
+        },
+        {
+          "iteration": 15,
+          "roundTripMs": 0.8194,
+          "requestBytes": 123,
+          "responseBytes": 65961,
+          "serializedBytes": 66084
+        },
+        {
+          "iteration": 16,
+          "roundTripMs": 0.8275,
+          "requestBytes": 123,
+          "responseBytes": 65961,
+          "serializedBytes": 66084
+        },
+        {
+          "iteration": 17,
+          "roundTripMs": 0.8699,
+          "requestBytes": 123,
+          "responseBytes": 65961,
+          "serializedBytes": 66084
+        },
+        {
+          "iteration": 18,
+          "roundTripMs": 1.0974,
+          "requestBytes": 123,
+          "responseBytes": 65961,
+          "serializedBytes": 66084
+        },
+        {
+          "iteration": 19,
+          "roundTripMs": 0.9314,
+          "requestBytes": 123,
+          "responseBytes": 65961,
+          "serializedBytes": 66084
+        },
+        {
+          "iteration": 20,
+          "roundTripMs": 0.8721,
+          "requestBytes": 123,
+          "responseBytes": 65961,
+          "serializedBytes": 66084
+        }
+      ]
+    }
+  ],
+  "lifecycle": {
+    "timeoutRejected": true,
+    "timeoutCleanupMs": 55.5621,
+    "disconnectRejected": true,
+    "disconnectCleanupMs": 5015.6813,
+    "pendingRequestsAfterChecks": 0,
+    "recoveryRequestSucceeded": true,
+    "shutdownState": {
+      "started": false,
+      "pendingRequests": 0,
+      "identifiedClients": 0,
+      "pendingClients": 0,
+      "heartbeatActive": false,
+      "httpServerActive": false
+    },
+    "portReleasedAfterShutdown": true,
+    "activeHandleCheck": {
+      "available": true,
+      "unexpectedCount": 0,
+      "unexpectedTypes": []
+    }
+  }
+}

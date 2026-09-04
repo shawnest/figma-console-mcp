@@ -15,7 +15,11 @@ export function percentile(values, percentileValue) {
 	if (!values.every(Number.isFinite)) {
 		throw new TypeError("percentile values must all be finite numbers");
 	}
-	if (!Number.isFinite(percentileValue) || percentileValue < 0 || percentileValue > 100) {
+	if (
+		!Number.isFinite(percentileValue) ||
+		percentileValue < 0 ||
+		percentileValue > 100
+	) {
 		throw new RangeError("percentile must be between 0 and 100");
 	}
 
@@ -25,7 +29,9 @@ export function percentile(values, percentileValue) {
 	const upperIndex = Math.ceil(rank);
 	const weight = rank - lowerIndex;
 
-	return sorted[lowerIndex] + (sorted[upperIndex] - sorted[lowerIndex]) * weight;
+	return (
+		sorted[lowerIndex] + (sorted[upperIndex] - sorted[lowerIndex]) * weight
+	);
 }
 
 /**
@@ -38,7 +44,8 @@ export function summarize(values) {
 
 	const average = values.reduce((sum, value) => sum + value, 0) / values.length;
 	const variance =
-		values.reduce((sum, value) => sum + (value - average) ** 2, 0) / values.length;
+		values.reduce((sum, value) => sum + (value - average) ** 2, 0) /
+		values.length;
 	const standardDeviation = Math.sqrt(variance);
 
 	return {
@@ -49,7 +56,6 @@ export function summarize(values) {
 		max: Math.max(...values),
 		mean: average,
 		standardDeviation,
-		coefficientOfVariation:
-			average === 0 ? 0 : standardDeviation / average,
+		coefficientOfVariation: average === 0 ? 0 : standardDeviation / average,
 	};
 }

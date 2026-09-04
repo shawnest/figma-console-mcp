@@ -79,6 +79,10 @@ The plugin will:
 - Provide on-demand component data via `window.requestComponentData(nodeId)`
 - Keep running until manually closed
 
+### Manual performance benchmark (opt-in)
+
+Expand the `+` menu and open `Benchmark` only when collecting a controlled manual run. `Start` enables structured timing capture, `Run sample` exercises variable refresh, all-page component traversal, and the local WebSocket ping, and `Export JSON` downloads the worker/UI timing entries. Normal operation keeps capture disabled and command result shapes unchanged. Use the [controlled fixture procedure](../docs/performance-benchmark-plugin-fixture.md) for repeatable tiers and metadata.
+
 ### Accessing Data via MCP
 
 Once the plugin is running, MCP clients can access both variables and components:

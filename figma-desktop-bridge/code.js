@@ -11,10 +11,170 @@
 // package.json — that's intentional, not drift.
 var PLUGIN_VERSION = '1.40.0'; // Last release in which plugin files changed.
 
+// ============================================================================
+// OPT-IN PERFORMANCE BENCHMARKING
+// ============================================================================
+// The normal bridge never records timings. The UI enables this explicitly with
+// BENCHMARK_CONTROL, after which named Plugin API stages are retained in memory
+// until BENCHMARK_EXPORT is requested. Keeping the state here (rather than in
+// console output) means concurrent requests can be correlated by runId and
+// requestId without changing any command result payloads.
+var __benchmarkClock = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+  ? function() { return performance.now(); }
+  : function() { return Date.now(); };
+var __benchmarkClockName = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+  ? 'performance.now'
+  : 'Date.now';
+var __benchmarkEvaluationStartedAt = __benchmarkClock();
+var __benchmarkUiReadyAt = null;
+var __benchmarkState = {
+  enabled: false,
+  runId: null,
+  startedAt: null,
+  entries: [],
+  sequence: 0,
+  transitSequence: 0,
+  pendingTransits: {}
+};
+
+function __benchmarkRoundMs(value) {
+  return Math.round(value * 1000) / 1000;
+}
+
+function __benchmarkRecord(stage, startMs, endMs, details) {
+  if (!__benchmarkState.enabled) return;
+  details = details || {};
+  var entry = {
+    sequence: ++__benchmarkState.sequence,
+    runId: __benchmarkState.runId,
+    requestId: details.requestId || null,
+    stage: stage,
+    scope: details.scope || 'plugin',
+    clock: __benchmarkClockName,
+    startMs: __benchmarkRoundMs(startMs),
+    durationMs: __benchmarkRoundMs(Math.max(0, endMs - startMs)),
+    recordedAt: Date.now()
+  };
+  for (var key in details) {
+    if (details.hasOwnProperty(key) && key !== 'requestId' && key !== 'scope') {
+      entry[key] = details[key];
+    }
+  }
+  __benchmarkState.entries.push(entry);
+}
+
+function __benchmarkMeasure(stage, requestId, work, details) {
+  if (!__benchmarkState.enabled) return work();
+  var startedAt = __benchmarkClock();
+  try {
+    return Promise.resolve(work()).then(function(result) {
+      __benchmarkRecord(stage, startedAt, __benchmarkClock(), Object.assign({}, details || {}, { requestId: requestId }));
+      return result;
+    }, function(error) {
+      __benchmarkRecord(stage, startedAt, __benchmarkClock(), Object.assign({}, details || {}, { requestId: requestId, success: false }));
+      throw error;
+    });
+  } catch (error) {
+    __benchmarkRecord(stage, startedAt, __benchmarkClock(), Object.assign({}, details || {}, { requestId: requestId, success: false }));
+    throw error;
+  }
+}
+
+function __benchmarkMeasureSync(stage, requestId, work, details) {
+  if (!__benchmarkState.enabled) return work();
+  var startedAt = __benchmarkClock();
+  try {
+    var result = work();
+    __benchmarkRecord(stage, startedAt, __benchmarkClock(), Object.assign({}, details || {}, { requestId: requestId }));
+    return result;
+  } catch (error) {
+    __benchmarkRecord(stage, startedAt, __benchmarkClock(), Object.assign({}, details || {}, { requestId: requestId, success: false }));
+    throw error;
+  }
+}
+
+function __benchmarkSnapshot() {
+  var rootName = null;
+  var pageName = null;
+  try { rootName = figma.root && figma.root.name ? figma.root.name : null; } catch (e) {}
+  try { pageName = figma.currentPage && figma.currentPage.name ? figma.currentPage.name : null; } catch (e) {}
+  return {
+    schemaVersion: 1,
+    suite: 'figma-plugin-manual',
+    runId: __benchmarkState.runId,
+    enabled: __benchmarkState.enabled,
+    pluginVersion: PLUGIN_VERSION,
+    editorType: __editorType,
+    fileKey: figma.fileKey || null,
+    fileName: rootName,
+    activePage: pageName,
+    startedAt: __benchmarkState.startedAt,
+    exportedAt: new Date().toISOString(),
+    clock: __benchmarkClockName,
+    entries: __benchmarkState.entries.slice()
+  };
+}
+
+function __benchmarkSetMode(enabled, runId) {
+  if (enabled) {
+    var enabledAt = __benchmarkClock();
+    __benchmarkState.enabled = true;
+    __benchmarkState.runId = runId || ('manual-' + Date.now());
+    __benchmarkState.startedAt = new Date().toISOString();
+    __benchmarkState.entries = [];
+    __benchmarkState.sequence = 0;
+    __benchmarkState.transitSequence = 0;
+    __benchmarkState.pendingTransits = {};
+    if (__benchmarkUiReadyAt !== null) {
+      __benchmarkRecord('plugin-code-evaluation-to-ui-ready', __benchmarkEvaluationStartedAt, __benchmarkUiReadyAt, {
+        scope: 'plugin-lifecycle'
+      });
+    }
+    __benchmarkRecord('benchmark-mode-enabled', enabledAt, __benchmarkClock(), {
+      scope: 'benchmark-control'
+    });
+  } else {
+    __benchmarkState.enabled = false;
+    __benchmarkState.pendingTransits = {};
+  }
+  return __benchmarkSnapshot();
+}
+
 console.log('🌉 [Desktop Bridge] Plugin loaded (v' + PLUGIN_VERSION + ')');
 
 // Show minimal UI - compact status indicator
 figma.showUI(__html__, { width: 240, height: 40, visible: true, themeColors: true });
+
+// In benchmark mode only, send a separate marker before each normal plugin→UI
+// message. ui.html acknowledges the marker, giving us a truthful round-trip
+// measurement without mutating the command's actual message or result shape.
+try {
+  var __benchmarkRawUiPostMessage = figma.ui.postMessage.bind(figma.ui);
+  figma.ui.postMessage = function(message, options) {
+    if (__benchmarkState.enabled && message && typeof message.type === 'string' && message.type.indexOf('BENCHMARK_') !== 0) {
+      var transitId = __benchmarkState.runId + '-transit-' + (++__benchmarkState.transitSequence);
+      var sentAt = __benchmarkClock();
+      __benchmarkState.pendingTransits[transitId] = {
+        startMs: sentAt,
+        requestId: message.requestId || null,
+        messageType: message.type
+      };
+      __benchmarkRawUiPostMessage({
+        type: 'BENCHMARK_TRANSIT_START',
+        data: {
+          runId: __benchmarkState.runId,
+          transitId: transitId,
+          messageType: message.type,
+          requestId: message.requestId || null
+        }
+      });
+    }
+    return __benchmarkRawUiPostMessage(message, options);
+  };
+} catch (error) {
+  // A host that does not allow method replacement still gets all local stages.
+  console.warn('🌉 [Desktop Bridge] Benchmark postMessage wrapping unavailable:', error && error.message ? error.message : String(error));
+}
 
 // ============================================================================
 // CONSOLE CAPTURE — Intercept console.* in the QuickJS sandbox and forward
@@ -101,37 +261,43 @@ var __stickyColors = {
     console.log('🌉 [Desktop Bridge] Fetching variables...');
 
     // Get all local variables and collections
-    const variables = await figma.variables.getLocalVariablesAsync();
-    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    const variables = await __benchmarkMeasure('local-variable-retrieval', null, function() {
+      return figma.variables.getLocalVariablesAsync();
+    }, { api: 'figma.variables.getLocalVariablesAsync' });
+    const collections = await __benchmarkMeasure('variable-collection-retrieval', null, function() {
+      return figma.variables.getLocalVariableCollectionsAsync();
+    }, { api: 'figma.variables.getLocalVariableCollectionsAsync' });
 
     console.log(`🌉 [Desktop Bridge] Found ${variables.length} variables in ${collections.length} collections`);
 
     // Format the data
-    const variablesData = {
-      success: true,
-      timestamp: Date.now(),
-      fileKey: figma.fileKey || null,
-      variables: variables.map(v => ({
-        id: v.id,
-        name: v.name,
-        key: v.key,
-        resolvedType: v.resolvedType,
-        valuesByMode: v.valuesByMode,
-        variableCollectionId: v.variableCollectionId,
-        scopes: v.scopes,
-        codeSyntax: v.codeSyntax || {},
-        description: v.description,
-        hiddenFromPublishing: v.hiddenFromPublishing
-      })),
-      variableCollections: collections.map(c => ({
-        id: c.id,
-        name: c.name,
-        key: c.key,
-        modes: c.modes,
-        defaultModeId: c.defaultModeId,
-        variableIds: c.variableIds
-      }))
-    };
+    const variablesData = __benchmarkMeasureSync('variable-mapping-serialization', null, function() {
+      return {
+        success: true,
+        timestamp: Date.now(),
+        fileKey: figma.fileKey || null,
+        variables: variables.map(v => ({
+          id: v.id,
+          name: v.name,
+          key: v.key,
+          resolvedType: v.resolvedType,
+          valuesByMode: v.valuesByMode,
+          variableCollectionId: v.variableCollectionId,
+          scopes: v.scopes,
+          codeSyntax: v.codeSyntax || {},
+          description: v.description,
+          hiddenFromPublishing: v.hiddenFromPublishing
+        })),
+        variableCollections: collections.map(c => ({
+          id: c.id,
+          name: c.name,
+          key: c.key,
+          modes: c.modes,
+          defaultModeId: c.defaultModeId,
+          variableIds: c.variableIds
+        }))
+      };
+    }, { variableCount: variables.length, collectionCount: collections.length });
 
     // Send to UI via postMessage
     figma.ui.postMessage({
@@ -355,25 +521,33 @@ async function loadFontsForNode(node) {
   } else if (typeof node.findAll === 'function') {
     textNodes = node.findAll(function(n) { return n.type === 'TEXT'; });
   }
-  var seen = {};
-  var fonts = [];
-  for (var i = 0; i < textNodes.length; i++) {
-    var tn = textNodes[i];
-    var names = [];
-    if (tn.fontName === figma.mixed) {
-      try { names = tn.getRangeAllFontNames(0, tn.characters.length); }
-      catch (e) { names = []; }
-    } else if (tn.fontName) {
-      names = [tn.fontName];
+  var fonts = __benchmarkMeasureSync('unique-font-discovery', null, function() {
+    var seen = {};
+    var discovered = [];
+    for (var i = 0; i < textNodes.length; i++) {
+      var tn = textNodes[i];
+      var names = [];
+      if (tn.fontName === figma.mixed) {
+        try { names = tn.getRangeAllFontNames(0, tn.characters.length); }
+        catch (e) { names = []; }
+      } else if (tn.fontName) {
+        names = [tn.fontName];
+      }
+      for (var j = 0; j < names.length; j++) {
+        var key = names[j].family + '||' + names[j].style;
+        if (!seen[key]) { seen[key] = true; discovered.push(names[j]); }
+      }
     }
-    for (var j = 0; j < names.length; j++) {
-      var key = names[j].family + '||' + names[j].style;
-      if (!seen[key]) { seen[key] = true; fonts.push(names[j]); }
-    }
-  }
+    return discovered;
+  }, { textNodeCount: textNodes.length });
+
+  var fontLoadingStartedAt = __benchmarkClock();
   for (var k = 0; k < fonts.length; k++) {
     try { await figma.loadFontAsync(fonts[k]); } catch (e) { /* skip unavailable */ }
   }
+  __benchmarkRecord('font-loading', fontLoadingStartedAt, __benchmarkClock(), {
+    fontCount: fonts.length
+  });
 }
 
 // Resolve a caller-supplied component property name against the instance's
@@ -487,6 +661,48 @@ async function resolveSlotNode(params) {
 
 // Listen for requests from UI (e.g., component data requests, write operations)
 figma.ui.onmessage = async (msg) => {
+
+  // The benchmark controls are deliberately handled before normal commands.
+  // They are local-only and never travel through the MCP tool surface.
+  if (msg.type === 'BENCHMARK_UI_READY') {
+    __benchmarkUiReadyAt = __benchmarkClock();
+    return;
+  }
+
+  if (msg.type === 'BENCHMARK_TRANSIT_ACK') {
+    var transit = __benchmarkState.pendingTransits[msg.transitId];
+    if (transit && msg.runId === __benchmarkState.runId && __benchmarkState.enabled) {
+      __benchmarkRecord('plugin-to-ui-postMessage-round-trip', transit.startMs, __benchmarkClock(), {
+        scope: 'plugin-ui',
+        requestId: transit.requestId,
+        messageType: transit.messageType,
+        measurement: 'ack-round-trip'
+      });
+    }
+    delete __benchmarkState.pendingTransits[msg.transitId];
+    return;
+  }
+
+  if (msg.type === 'BENCHMARK_CONTROL') {
+    var controlSnapshot = __benchmarkSetMode(msg.enabled !== false, msg.runId);
+    figma.ui.postMessage({
+      type: 'BENCHMARK_CONTROL_RESULT',
+      requestId: msg.requestId,
+      success: true,
+      data: controlSnapshot
+    });
+    return;
+  }
+
+  if (msg.type === 'BENCHMARK_EXPORT') {
+    figma.ui.postMessage({
+      type: 'BENCHMARK_EXPORT_RESULT',
+      requestId: msg.requestId,
+      success: true,
+      data: __benchmarkSnapshot()
+    });
+    return;
+  }
 
   // ============================================================================
   // EXECUTE_CODE - Arbitrary code execution (Power Tool)
@@ -999,16 +1215,22 @@ figma.ui.onmessage = async (msg) => {
     try {
       console.log('🌉 [Desktop Bridge] Refreshing variables data...');
 
-      var variables = await figma.variables.getLocalVariablesAsync();
-      var collections = await figma.variables.getLocalVariableCollectionsAsync();
+      var variables = await __benchmarkMeasure('local-variable-retrieval', msg.requestId, function() {
+        return figma.variables.getLocalVariablesAsync();
+      }, { api: 'figma.variables.getLocalVariablesAsync' });
+      var collections = await __benchmarkMeasure('variable-collection-retrieval', msg.requestId, function() {
+        return figma.variables.getLocalVariableCollectionsAsync();
+      }, { api: 'figma.variables.getLocalVariableCollectionsAsync' });
 
-      var variablesData = {
-        success: true,
-        timestamp: Date.now(),
-        fileKey: figma.fileKey || null,
-        variables: variables.map(serializeVariable),
-        variableCollections: collections.map(serializeCollection)
-      };
+      var variablesData = __benchmarkMeasureSync('variable-mapping-serialization', msg.requestId, function() {
+        return {
+          success: true,
+          timestamp: Date.now(),
+          fileKey: figma.fileKey || null,
+          variables: variables.map(serializeVariable),
+          variableCollections: collections.map(serializeCollection)
+        };
+      }, { variableCount: variables.length, collectionCount: collections.length });
 
       // Update the UI's cached data
       figma.ui.postMessage({
@@ -1830,13 +2052,19 @@ figma.ui.onmessage = async (msg) => {
 
       // Load all pages first (required before accessing children)
       console.log('🌉 [Desktop Bridge] Loading all pages...');
+      var loadAllPagesStartedAt = __benchmarkClock();
       await figma.loadAllPagesAsync();
+      __benchmarkRecord('load-all-pages-async', loadAllPagesStartedAt, __benchmarkClock(), {
+        requestId: msg.requestId,
+        api: 'figma.loadAllPagesAsync'
+      });
 
       // Process pages in batches with event loop yields to prevent UI freeze
       // This is critical for large design systems that could otherwise crash
       var pages = figma.root.children;
       var PAGE_BATCH_SIZE = 3;  // Process 3 pages at a time
       var totalPages = pages.length;
+      var componentTraversalStartedAt = __benchmarkClock();
 
       console.log('🌉 [Desktop Bridge] Processing ' + totalPages + ' pages in batches of ' + PAGE_BATCH_SIZE + '...');
 
@@ -1862,6 +2090,14 @@ figma.ui.onmessage = async (msg) => {
           await new Promise(function(resolve) { setTimeout(resolve, 0); });
         }
       }
+
+      __benchmarkRecord('component-traversal', componentTraversalStartedAt, __benchmarkClock(), {
+        requestId: msg.requestId,
+        pageCount: totalPages,
+        componentCount: components.length,
+        componentSetCount: componentSets.length,
+        batchSize: PAGE_BATCH_SIZE
+      });
 
       console.log('🌉 [Desktop Bridge] Found ' + components.length + ' components and ' + componentSets.length + ' component sets');
 

@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 import { execFileSync, spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { arch, cpus, platform, totalmem } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, join, relative, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
+import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { summarize } from "./stats.mjs";
@@ -19,6 +20,9 @@ const DEFAULT_WARMUP_RUNS = 1;
 const DEFAULT_MEASURED_RUNS = 20;
 const REQUEST_TIMEOUT_MS = 30_000;
 const MAX_DIAGNOSTIC_BYTES = 32 * 1024;
+// Keep enough headroom for normal catalog edits while catching accidental
+// multi-hundred-kilobyte catalog growth in CI.
+const MAX_CATALOG_BYTES = 200_000;
 
 class TimedStdioClientTransport extends StdioClientTransport {
 	spawnStartedAt = null;
@@ -37,6 +41,14 @@ function parsePositiveInteger(value, flag) {
 	return parsed;
 }
 
+function nextArgumentValue(argv, index, flag) {
+	const value = argv[index + 1];
+	if (!value || value.startsWith("--")) {
+		throw new Error(`${flag} requires a value`);
+	}
+	return value;
+}
+
 function parseArguments(argv) {
 	const configuration = {
 		warmupRuns: DEFAULT_WARMUP_RUNS,
@@ -46,11 +58,23 @@ function parseArguments(argv) {
 	for (let index = 0; index < argv.length; index += 1) {
 		const argument = argv[index];
 		if (argument === "--warmup-runs") {
-			configuration.warmupRuns = parsePositiveInteger(argv[++index], argument);
+			configuration.warmupRuns = parsePositiveInteger(
+				nextArgumentValue(argv, index, argument),
+				argument,
+			);
+			index += 1;
 		} else if (argument === "--runs") {
-			configuration.measuredRuns = parsePositiveInteger(argv[++index], argument);
+			configuration.measuredRuns = parsePositiveInteger(
+				nextArgumentValue(argv, index, argument),
+				argument,
+			);
+			index += 1;
 		} else if (argument === "--promote") {
-			configuration.promote = argv[++index];
+			configuration.promote = nextArgumentValue(argv, index, argument);
+			index += 1;
+		} else if (argument === "--server-path") {
+			configuration.serverPath = nextArgumentValue(argv, index, argument);
+			index += 1;
 		} else if (argument === "--help" || argument === "-h") {
 			configuration.help = true;
 		} else {
@@ -67,8 +91,9 @@ function parseArguments(argv) {
 function printUsage() {
 	console.log(`Usage:
   npm run benchmark:startup
-  npm run benchmark:startup -- --warmup-runs 1 --runs 20
-  npm run benchmark:startup -- --promote benchmarks/results/<timestamp>/mcp-startup.json
+  node benchmarks/mcp-startup.mjs --warmup-runs 1 --runs 20
+  node benchmarks/mcp-startup.mjs --server-path dist/local.js --runs 1
+  node benchmarks/mcp-startup.mjs --promote benchmarks/results/<timestamp>/mcp-startup.json
 
 The promotion command copies one explicitly chosen result to:
   benchmarks/baselines/mcp-startup.json`);
@@ -122,9 +147,7 @@ function sampleIdleRssMb(pid) {
 		}
 
 		if (platform() === "linux") {
-			const status = execFileSync("cat", [`/proc/${pid}/status`], {
-				encoding: "utf8",
-			});
+			const status = readFileSync(`/proc/${pid}/status`, "utf8");
 			const match = /^VmRSS:\s+(\d+)\s+kB$/m.exec(status);
 			return match ? Number.parseInt(match[1], 10) / 1024 : null;
 		}
@@ -150,20 +173,19 @@ async function listAllTools(client) {
 	const tools = [];
 	let cursor;
 	do {
-		const page = await client.listTools(
-			cursor ? { cursor } : undefined,
-			{ timeout: REQUEST_TIMEOUT_MS },
-		);
+		const page = await client.listTools(cursor ? { cursor } : undefined, {
+			timeout: REQUEST_TIMEOUT_MS,
+		});
 		tools.push(...page.tools);
 		cursor = page.nextCursor;
 	} while (cursor);
 	return tools;
 }
 
-async function runSample(runNumber, warmup) {
+async function runSample(runNumber, warmup, serverPath) {
 	const transport = new TimedStdioClientTransport({
 		command: process.execPath,
-		args: [SERVER_PATH],
+		args: [serverPath],
 		cwd: REPOSITORY_ROOT,
 		env: { ...process.env },
 		stderr: "pipe",
@@ -181,13 +203,20 @@ async function runSample(runNumber, warmup) {
 		await client.connect(transport, { timeout: REQUEST_TIMEOUT_MS });
 		const initializedAt = performance.now();
 		if (transport.spawnStartedAt === null || transport.pid === null) {
-			throw new Error("MCP SDK did not expose child-process timing information");
+			throw new Error(
+				"MCP SDK did not expose child-process timing information",
+			);
 		}
 
 		const listStartedAt = performance.now();
 		const tools = await listAllTools(client);
 		const listCompletedAt = performance.now();
 		const catalogBytes = Buffer.byteLength(JSON.stringify(tools), "utf8");
+		if (catalogBytes > MAX_CATALOG_BYTES) {
+			throw new Error(
+				`Catalog is ${catalogBytes} bytes, above the ${MAX_CATALOG_BYTES}-byte smoke limit`,
+			);
+		}
 
 		return {
 			run: runNumber,
@@ -202,9 +231,11 @@ async function runSample(runNumber, warmup) {
 		};
 	} catch (error) {
 		const detail = diagnostics.trim();
-		const context = detail ? `\nChild stderr (tail):\n${detail}` : "\nChild produced no stderr.";
+		const context = detail
+			? `\nChild stderr (tail):\n${detail}`
+			: "\nChild produced no stderr.";
 		throw new Error(
-			`MCP startup sample ${runNumber}${warmup ? " (warm-up)" : ""} failed: ${error instanceof Error ? error.stack ?? error.message : String(error)}${context}`,
+			`MCP startup sample ${runNumber}${warmup ? " (warm-up)" : ""} failed: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}${context}`,
 			{ cause: error },
 		);
 	} finally {
@@ -230,7 +261,9 @@ function roundedSummary(values) {
 function invariantValue(samples, key) {
 	const values = new Set(samples.map((sample) => sample[key]));
 	if (values.size !== 1) {
-		throw new Error(`${key} changed between measured runs: ${[...values].join(", ")}`);
+		throw new Error(
+			`${key} changed between measured runs: ${[...values].join(", ")}`,
+		);
 	}
 	return samples[0][key];
 }
@@ -284,6 +317,9 @@ async function main() {
 	console.log(
 		`MCP startup benchmark: ${configuration.warmupRuns} warm-up, ${configuration.measuredRuns} measured runs`,
 	);
+	const serverPath = configuration.serverPath
+		? resolve(REPOSITORY_ROOT, configuration.serverPath)
+		: SERVER_PATH;
 	const totalRuns = configuration.warmupRuns + configuration.measuredRuns;
 	const samples = [];
 	for (let index = 0; index < totalRuns; index += 1) {
@@ -292,7 +328,7 @@ async function main() {
 		process.stdout.write(
 			`${warmup ? "Warm-up" : "Measured"} ${runNumber}/${warmup ? configuration.warmupRuns : configuration.measuredRuns}... `,
 		);
-		const sample = await runSample(runNumber, warmup);
+		const sample = await runSample(runNumber, warmup, serverPath);
 		console.log(`${sample.initializeMs.toFixed(2)} ms ready`);
 		if (!warmup) samples.push(sample);
 	}
@@ -311,18 +347,28 @@ async function main() {
 		configuration: {
 			warmupRuns: configuration.warmupRuns,
 			measuredRuns: configuration.measuredRuns,
+			serverPath: relative(REPOSITORY_ROOT, serverPath).replaceAll("\\", "/"),
 			requestTimeoutMs: REQUEST_TIMEOUT_MS,
+			hardLimits: {
+				maxCatalogBytes: MAX_CATALOG_BYTES,
+			},
 			catalogSerialization: "UTF-8 byte length of JSON.stringify(tools)",
-			estimatedCatalogTokens: "ceil(catalogBytes / 4); estimate only, not tokenizer output",
+			estimatedCatalogTokens:
+				"ceil(catalogBytes / 4); estimate only, not tokenizer output",
 			percentileMethod: "linear interpolation between adjacent ranks",
 		},
 		metrics: {
-			initializeMs: roundedSummary(samples.map((sample) => sample.initializeMs)),
+			initializeMs: roundedSummary(
+				samples.map((sample) => sample.initializeMs),
+			),
 			listToolsMs: roundedSummary(samples.map((sample) => sample.listToolsMs)),
 			toolCount: invariantValue(samples, "toolCount"),
 			catalogBytes: invariantValue(samples, "catalogBytes"),
 			estimatedCatalogTokens: invariantValue(samples, "estimatedCatalogTokens"),
-			idleRssMb: rssSamples.length === samples.length ? roundedSummary(rssSamples) : null,
+			idleRssMb:
+				rssSamples.length === samples.length
+					? roundedSummary(rssSamples)
+					: null,
 			idleHeapMb: null,
 		},
 		availability: {
@@ -347,6 +393,8 @@ async function main() {
 }
 
 main().catch((error) => {
-	console.error(error instanceof Error ? error.stack ?? error.message : error);
+	console.error(
+		error instanceof Error ? (error.stack ?? error.message) : error,
+	);
 	process.exitCode = 1;
 });

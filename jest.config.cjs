@@ -24,6 +24,4 @@ module.exports = {
     '^(\\.{1,2}/.*)\\.js$': '$1',
     '^cloudflare:workers$': '<rootDir>/tests/__mocks__/cloudflare-workers.js',
   },
-  // Required: WebSocket event listeners in tests can keep Node alive after tests complete
-  forceExit: true,
 };
