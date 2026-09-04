@@ -26,7 +26,7 @@ export function looksLikeImageFilePath(value: string): boolean {
 	const s = stripWrappingQuotes(value.trim());
 	if (!s || /^data:/i.test(s)) return false;
 	if (/^file:/i.test(s)) return true;
-	return IMAGE_EXT.test(pathWithoutQuery(s));
+	return IMAGE_EXT.test(s);
 }
 
 /**
@@ -46,14 +46,15 @@ export function resolveImageInput(imageData: string): ResolvedImageInput {
 		trimmed,
 	);
 	if (dataUrl) {
-		return { base64: dataUrl[1].replace(/\s/g, ""), source: "data-url" };
+		const base64 = normalizeBase64(dataUrl[1]);
+		return { base64, source: "data-url" };
 	}
 
 	if (looksLikeImageFilePath(trimmed)) {
 		return readImageFile(trimmed);
 	}
 
-	return { base64: trimmed.replace(/\s/g, ""), source: "base64" };
+	return { base64: normalizeBase64(trimmed), source: "base64" };
 }
 
 function stripWrappingQuotes(value: string): string {
@@ -66,8 +67,20 @@ function stripWrappingQuotes(value: string): string {
 	return value;
 }
 
-function pathWithoutQuery(value: string): string {
-	return value.split(/[?#]/)[0];
+function normalizeBase64(value: string): string {
+	const base64 = value.replace(/\s/g, "");
+	const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+	const decodedBytes = Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+	assertImageSize(decodedBytes);
+	return base64;
+}
+
+function assertImageSize(bytes: number): void {
+	if (bytes > MAX_IMAGE_BYTES) {
+		throw new Error(
+			`Image is too large (${Math.ceil(bytes / (1024 * 1024))}MB). Maximum is ${MAX_IMAGE_BYTES / (1024 * 1024)}MB.`,
+		);
+	}
 }
 
 function readImageFile(rawPath: string): ResolvedImageInput {
@@ -109,11 +122,7 @@ function readImageFile(rawPath: string): ResolvedImageInput {
 	}
 
 	const stat = statSync(filePath);
-	if (stat.size > MAX_IMAGE_BYTES) {
-		throw new Error(
-			`Image is too large (${Math.round(stat.size / (1024 * 1024))}MB). Maximum is ${MAX_IMAGE_BYTES / (1024 * 1024)}MB.`,
-		);
-	}
+	assertImageSize(stat.size);
 
 	return {
 		base64: readFileSync(filePath).toString("base64"),
