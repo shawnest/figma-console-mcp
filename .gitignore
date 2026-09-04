@@ -207,6 +207,9 @@ Temporary Items
 # Playwright MCP temp files
 .playwright-mcp/
 
+# Local benchmark results (promoted baselines under benchmarks/baselines are tracked)
+benchmarks/results/
+
 # VS Code MCP config (contains tokens)
 .vscode/mcp.json
 .env.mcp

@@ -1,6 +1,6 @@
 {
-  "name": "Figma Desktop Bridge",
-  "id": "figma-desktop-bridge-mcp",
+  "name": "Figma Desktop Bridge (local)",
+  "id": "figma-desktop-bridge-mcp-local",
   "api": "1.0.0",
   "main": "code.js",
   "ui": "ui.html",

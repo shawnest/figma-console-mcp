@@ -10,7 +10,7 @@
  * suitable for local IDE integrations and development workflows.
  *
  * Requirements:
- * - Desktop Bridge plugin open in Figma (Plugins → Development → Figma Desktop Bridge)
+ * - Desktop Bridge plugin open in Figma (Plugins → Development → Figma Desktop Bridge (local))
  * - FIGMA_ACCESS_TOKEN environment variable for API access
  */
 
@@ -73,8 +73,13 @@ import { registerSlotTools } from "./core/slot-tools.js";
 
 const logger = createChildLogger({ component: "local-server" });
 
+/** Shown in Figma → Plugins → Development. Distinct from the published NPX plugin. */
+const LOCAL_PLUGIN_MENU_NAME = "Figma Desktop Bridge (local)";
+/** Separate from ~/.figma-console-mcp/plugin/ so the published plugin files are not overwritten. */
+const LOCAL_PLUGIN_STABLE_DIR = "plugin-local";
+
 /**
- * Copy plugin files to a stable directory (~/.figma-console-mcp/plugin/).
+ * Copy plugin files to a stable directory (~/.figma-console-mcp/plugin-local/).
  * This gives users a permanent, predictable path to import from instead of
  * the volatile npx cache path that changes between updates.
  *
@@ -82,7 +87,7 @@ const logger = createChildLogger({ component: "local-server" });
  */
 function setupStablePluginDir(sourcePluginDir: string): string | null {
 	try {
-		const stableDir = join(homedir(), ".figma-console-mcp", "plugin");
+		const stableDir = join(homedir(), ".figma-console-mcp", LOCAL_PLUGIN_STABLE_DIR);
 		mkdirSync(stableDir, { recursive: true });
 
 		const filesToCopy = ["manifest.json", "code.js", "ui.html"];
@@ -286,7 +291,7 @@ If Design Systems Assistant MCP is not available, install it from: https://githu
 		const wsPort = this.wsActualPort || this.wsPreferredPort || DEFAULT_WS_PORT;
 		const err = new Error(
 			"Cannot connect to Figma Desktop.\n\n" +
-			"Open the Desktop Bridge plugin in Figma (Plugins → Development → Figma Desktop Bridge).\n" +
+			"Open the Desktop Bridge plugin in Figma (Plugins → Development → " + LOCAL_PLUGIN_MENU_NAME + ").\n" +
 			`The plugin will connect automatically to ws://localhost:${wsPort}.\n` +
 			"No special launch flags needed."
 		);
@@ -368,7 +373,7 @@ If Design Systems Assistant MCP is not available, install it from: https://githu
 			canRetry: !isNoClient,
 			recoverySteps: [
 				"Open Figma Desktop with your target file",
-				"Go to Plugins → Development → Figma Desktop Bridge",
+				"Go to Plugins → Development → " + LOCAL_PLUGIN_MENU_NAME,
 				"Click 'Run' to open the plugin",
 				"Wait 3 seconds, then call figma_get_status with probe:true to verify",
 			],
@@ -409,7 +414,7 @@ If Design Systems Assistant MCP is not available, install it from: https://githu
 			// The user may open the plugin later
 			logger.warn(
 				`WebSocket transport not available yet.\n\n` +
-				`Open the Desktop Bridge plugin in Figma (Plugins → Development → Figma Desktop Bridge).\n` +
+				`Open the Desktop Bridge plugin in Figma (Plugins → Development → ${LOCAL_PLUGIN_MENU_NAME}).\n` +
 				`No special launch flags needed — the plugin connects automatically.`,
 			);
 		}
@@ -420,7 +425,7 @@ If Design Systems Assistant MCP is not available, install it from: https://githu
 
 	/**
 	 * Resolve the path to the Desktop Bridge plugin manifest.
-	 * Prefers the stable directory (~/.figma-console-mcp/plugin/) over the npx cache path.
+	 * Prefers the stable directory (~/.figma-console-mcp/plugin-local/) over the npx cache path.
 	 */
 	private getPluginPath(): string | null {
 		// Prefer stable path — consistent across npx updates
@@ -1257,7 +1262,7 @@ If Design Systems Assistant MCP is not available, install it from: https://githu
 							]
 							: [
 								"Open Figma Desktop with your target file",
-								"Go to Plugins → Development → Figma Desktop Bridge",
+								"Go to Plugins → Development → " + LOCAL_PLUGIN_MENU_NAME,
 								"Click 'Run' to open the plugin",
 								"Wait 3 seconds for the WebSocket connection to establish",
 								"Call figma_get_status with probe:true to verify the connection",
@@ -1362,7 +1367,7 @@ If Design Systems Assistant MCP is not available, install it from: https://githu
 														fix: "Close some of the other Claude Desktop tabs or terminal sessions running the MCP server, then restart this one.",
 													}
 													: {
-														instructions: `Open the Desktop Bridge plugin in Figma (Plugins → Development → Figma Desktop Bridge). No special launch flags needed.${this.getPluginPath() ? ' Plugin manifest: ' + this.getPluginPath() : ''}`,
+														instructions: `Open the Desktop Bridge plugin in Figma (Plugins → Development → ${LOCAL_PLUGIN_MENU_NAME}). No special launch flags needed.${this.getPluginPath() ? ' Plugin manifest: ' + this.getPluginPath() : ''}`,
 													}
 												: undefined,
 											ai_instruction: !setupValid
@@ -1423,7 +1428,7 @@ If Design Systems Assistant MCP is not available, install it from: https://githu
 					if (!this.wsServer?.isClientConnected()) {
 						throw new Error(
 							"Cannot connect to Figma Desktop.\n\n" +
-							"Open the Desktop Bridge plugin in Figma (Plugins → Development → Figma Desktop Bridge)."
+							"Open the Desktop Bridge plugin in Figma (Plugins → Development → " + LOCAL_PLUGIN_MENU_NAME + ")."
 						);
 					}
 
@@ -3790,7 +3795,7 @@ Without libraryFileKey/libraryFileUrl, searches the currently open file (local c
 				"Starting Figma Console MCP (Local Mode)",
 			);
 
-			// Copy plugin files to stable directory (~/.figma-console-mcp/plugin/)
+			// Copy plugin files to stable directory (~/.figma-console-mcp/plugin-local/)
 			// so users have a permanent import path that survives npx cache changes.
 			try {
 				const thisFile = fileURLToPath(import.meta.url);
@@ -4142,7 +4147,7 @@ if (currentFile === entryFile) {
 
 			// Last resort: print the stable dir path even if it doesn't exist yet
 			// (the server will create it on first startup)
-			const stableDir = join(homedir(), ".figma-console-mcp", "plugin", "manifest.json");
+			const stableDir = join(homedir(), ".figma-console-mcp", LOCAL_PLUGIN_STABLE_DIR, "manifest.json");
 			console.log(stableDir);
 			console.error("\nNote: This path will be populated when the MCP server starts.");
 			process.exit(0);

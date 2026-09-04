@@ -28,6 +28,7 @@
 		"test": "jest",
 		"test:watch": "jest --watch",
 		"test:coverage": "jest --coverage",
+		"benchmark:startup": "npm run build:local && node benchmarks/mcp-startup.mjs",
 		"format": "biome format --write",
 		"lint:fix": "biome lint --fix",
 		"cf-typegen": "wrangler types",
