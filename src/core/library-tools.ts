@@ -465,6 +465,7 @@ function unwrapBridgeResult(raw: any): any {
 export function registerLibraryVariableTools(
 	server: McpServer,
 	getDesktopConnector: () => Promise<IFigmaConnector>,
+	onWrite?: () => void,
 ): void {
 	// --------------------------------------------------------------------
 	// figma_get_library_variables — list available variables from
@@ -757,6 +758,7 @@ After import, the variable becomes locally addressable by its returned 'id' and 
 					};
 				}
 
+				onWrite?.();
 				return {
 					content: [
 						{

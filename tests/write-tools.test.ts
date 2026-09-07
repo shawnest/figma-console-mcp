@@ -120,6 +120,26 @@ describe("Write Tools", () => {
 		expect(server.tool).toHaveBeenCalledTimes(31);
 	});
 
+	it("invokes the cache invalidation callback after mutations", async () => {
+		const callbackServer = createMockServer();
+		const onWrite = jest.fn();
+		registerWriteTools(
+			callbackServer as any,
+			async () => mockConnector as any,
+			onWrite,
+		);
+
+		await callbackServer._getTool("figma_resize_node").handler({
+			nodeId: "n1",
+			width: 100,
+			height: 50,
+		});
+		expect(onWrite).toHaveBeenCalledTimes(1);
+
+		await callbackServer._getTool("figma_lint_design").handler({});
+		expect(onWrite).toHaveBeenCalledTimes(1);
+	});
+
 	// ========================================================================
 	// figma_execute — behavioral tests
 	// ========================================================================

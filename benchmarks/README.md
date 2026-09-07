@@ -67,9 +67,11 @@ Build the local server and run the deterministic design-system matrix without Fi
 npm run benchmark:design-system
 ```
 
-The suite uses generated fixtures for 10/100/500 components and 100/1,000/5,000 variables. It measures tokens, components, styles, full kits, image-inclusive kits, compact/summary/full formats, variable cache miss/hit, and one MCP client/server round trip. Direct scenarios call the extracted assembly function; the MCP scenario uses the registered public tool through the SDK's in-memory transport.
+The suite uses generated fixtures for 10/100/500 components and 100/1,000/5,000 variables. It measures tokens, components, styles, full kits, image-inclusive kits, compact/summary/full formats, variable cache miss/hit, complete-kit cache hits, and one MCP client/server round trip. Direct scenarios call the extracted assembly function; the MCP scenario uses the registered public tool through the SDK's in-memory transport.
 
-The fake Figma API records REST request count, maximum observed concurrency, deterministic fixed or seeded latency, and the union of simulated wait intervals. `localProcessingMs` is wall time minus that interval union, so the report makes the current sequential top-level orchestration visible without contacting Figma.
+The local server keeps successful complete-kit snapshots for five minutes. Cache keys include the file, requested sections, component filter, image flag, and output format; concurrent identical requests share one assembly. The `kit-cache-hit` scenario measures the zero-REST repeat path, while write operations and document-change events invalidate affected snapshots.
+
+The fake Figma API records REST request count, maximum observed concurrency, deterministic fixed or seeded latency, and the union of simulated wait intervals. `localProcessingMs` is wall time minus that interval union. The assembly path runs independent sections and node batches concurrently through a shared four-request REST limiter, so the report makes both the parallel critical path and its local processing cost visible without contacting Figma.
 
 Use a short diagnostic run while developing the benchmark:
 

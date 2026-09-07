@@ -247,79 +247,9 @@ var __stickyColors = {
   'GRAY': { r: 0.7, g: 0.7, b: 0.7 }
 };
 
-// Immediately fetch and send variables data to UI (skip in FigJam — no variables API)
-(async () => {
-  if (__editorType === 'figjam' || __editorType === 'slides') {
-    console.log('🌉 [Desktop Bridge] ' + __editorType + ' mode — skipping variables fetch');
-    figma.ui.postMessage({
-      type: 'VARIABLES_DATA',
-      data: { success: true, timestamp: Date.now(), fileKey: figma.fileKey || null, variables: [], variableCollections: [], editorType: __editorType }
-    });
-    return;
-  }
-  try {
-    console.log('🌉 [Desktop Bridge] Fetching variables...');
-
-    // Get all local variables and collections
-    const variables = await __benchmarkMeasure('local-variable-retrieval', null, function() {
-      return figma.variables.getLocalVariablesAsync();
-    }, { api: 'figma.variables.getLocalVariablesAsync' });
-    const collections = await __benchmarkMeasure('variable-collection-retrieval', null, function() {
-      return figma.variables.getLocalVariableCollectionsAsync();
-    }, { api: 'figma.variables.getLocalVariableCollectionsAsync' });
-
-    console.log(`🌉 [Desktop Bridge] Found ${variables.length} variables in ${collections.length} collections`);
-
-    // Format the data
-    const variablesData = __benchmarkMeasureSync('variable-mapping-serialization', null, function() {
-      return {
-        success: true,
-        timestamp: Date.now(),
-        fileKey: figma.fileKey || null,
-        variables: variables.map(v => ({
-          id: v.id,
-          name: v.name,
-          key: v.key,
-          resolvedType: v.resolvedType,
-          valuesByMode: v.valuesByMode,
-          variableCollectionId: v.variableCollectionId,
-          scopes: v.scopes,
-          codeSyntax: v.codeSyntax || {},
-          description: v.description,
-          hiddenFromPublishing: v.hiddenFromPublishing
-        })),
-        variableCollections: collections.map(c => ({
-          id: c.id,
-          name: c.name,
-          key: c.key,
-          modes: c.modes,
-          defaultModeId: c.defaultModeId,
-          variableIds: c.variableIds
-        }))
-      };
-    }, { variableCount: variables.length, collectionCount: collections.length });
-
-    // Send to UI via postMessage
-    figma.ui.postMessage({
-      type: 'VARIABLES_DATA',
-      data: variablesData
-    });
-
-    console.log('🌉 [Desktop Bridge] Variables data sent to UI successfully');
-    console.log('🌉 [Desktop Bridge] UI iframe now has variables data accessible via window.__figmaVariablesData');
-
-  } catch (error) {
-    console.error('🌉 [Desktop Bridge] Error fetching variables:', error);
-    figma.ui.postMessage({
-      type: 'ERROR',
-      error: error.message || String(error)
-    });
-  }
-})();
-
 // Restore persisted cloud pairing config (stored via STORE_CLOUD_CONFIG) and
 // push it to the UI so cloud users don't lose their pairing on plugin reopen.
-// Fire-and-forget: never blocks the FILE_INFO/VARIABLES_DATA pushes above.
+// Fire-and-forget: never blocks normal plugin command handling.
 (function() {
   figma.clientStorage.getAsync('cloudConfig')
     .then(function(stored) {
@@ -360,6 +290,101 @@ function serializeCollection(c) {
     defaultModeId: c.defaultModeId,
     variableIds: c.variableIds
   };
+}
+
+// Variable data is intentionally loaded on demand. Figma files can contain
+// thousands of local variables, and most sessions never ask for them. Keep
+// the snapshot in the plugin worker so all UI/WebSocket connections share it.
+var __variablesSnapshot = null;
+var __variablesSnapshotPromise = null;
+var __variablesSnapshotGeneration = 0;
+
+function __emptyVariablesSnapshot() {
+  return {
+    success: true,
+    timestamp: Date.now(),
+    fileKey: figma.fileKey || null,
+    variables: [],
+    variableCollections: [],
+    editorType: __editorType
+  };
+}
+
+function __invalidateVariablesSnapshot() {
+  // The generation protects against a read that started before a write and
+  // resolves after it. Such a read must never repopulate the cache with stale
+  // data, or be returned to a concurrent caller as the authoritative snapshot.
+  __variablesSnapshotGeneration++;
+  __variablesSnapshot = null;
+}
+
+function __getVariablesSnapshot(forceRefresh, requestId) {
+  if (!forceRefresh && __variablesSnapshot) {
+    return Promise.resolve(__variablesSnapshot);
+  }
+
+  // A refresh arriving while the first read is still in flight can share that
+  // live read. There is no cached value for it to bypass, and this prevents
+  // simultaneous initial requests from issuing duplicate Plugin API calls.
+  if (__variablesSnapshotPromise) return __variablesSnapshotPromise;
+
+  if (__editorType === 'figjam' || __editorType === 'slides') {
+    __variablesSnapshot = __emptyVariablesSnapshot();
+    return Promise.resolve(__variablesSnapshot);
+  }
+
+  var generation = __variablesSnapshotGeneration;
+  console.log('🌉 [Desktop Bridge] Fetching variables on request...');
+
+  var readPromise = Promise.resolve().then(async function() {
+    var variables = await __benchmarkMeasure('local-variable-retrieval', requestId, function() {
+      return figma.variables.getLocalVariablesAsync();
+    }, { api: 'figma.variables.getLocalVariablesAsync' });
+    var collections = await __benchmarkMeasure('variable-collection-retrieval', requestId, function() {
+      return figma.variables.getLocalVariableCollectionsAsync();
+    }, { api: 'figma.variables.getLocalVariableCollectionsAsync' });
+
+    console.log('🌉 [Desktop Bridge] Found ' + variables.length + ' variables in ' + collections.length + ' collections');
+
+    return __benchmarkMeasureSync('variable-mapping-serialization', requestId, function() {
+      return {
+        success: true,
+        timestamp: Date.now(),
+        fileKey: figma.fileKey || null,
+        variables: variables.map(serializeVariable),
+        variableCollections: collections.map(serializeCollection)
+      };
+    }, { variableCount: variables.length, collectionCount: collections.length });
+  });
+
+  var trackedPromise = readPromise.then(function(data) {
+    if (generation !== __variablesSnapshotGeneration) {
+      // A write won the race with this read. Start one replacement read before
+      // resolving so callers never observe the stale pre-write result.
+      if (__variablesSnapshotPromise === trackedPromise) __variablesSnapshotPromise = null;
+      return __getVariablesSnapshot(true, requestId);
+    }
+    __variablesSnapshot = data;
+    if (__variablesSnapshotPromise === trackedPromise) __variablesSnapshotPromise = null;
+    return data;
+  }, function(error) {
+    // Do not retain a rejected promise: the next request must be able to retry.
+    if (__variablesSnapshotPromise === trackedPromise) __variablesSnapshotPromise = null;
+    throw error;
+  });
+
+  __variablesSnapshotPromise = trackedPromise;
+  return trackedPromise;
+}
+
+// FigJam and Slides have no local-variable API. Preserve their historical
+// empty response without making any Plugin API call on startup.
+if (__editorType === 'figjam' || __editorType === 'slides') {
+  __variablesSnapshot = __emptyVariablesSnapshot();
+  figma.ui.postMessage({
+    type: 'VARIABLES_DATA',
+    data: __variablesSnapshot
+  });
 }
 
 // Helper to extract a component's SLOT contract (Figma slots, GA June 2026).
@@ -788,6 +813,12 @@ figma.ui.onmessage = async (msg) => {
         console.warn('🌉 [Desktop Bridge] ⚠️ Result warning:', resultAnalysis.warning);
       }
 
+      // EXECUTE_CODE can mutate variables without going through one of the
+      // dedicated CRUD handlers (for example, batched token imports). Clear
+      // the snapshot on both success and failure so arbitrary code cannot
+      // leave a stale variable result visible.
+      __invalidateVariablesSnapshot();
+
       figma.ui.postMessage({
         type: 'EXECUTE_CODE_RESULT',
         requestId: msg.requestId,
@@ -813,11 +844,37 @@ figma.ui.onmessage = async (msg) => {
         console.error('🌉 [Desktop Bridge] Stack:', errorStack);
       }
 
+      // A script may have changed variables before throwing.
+      __invalidateVariablesSnapshot();
+
       figma.ui.postMessage({
         type: 'EXECUTE_CODE_RESULT',
         requestId: msg.requestId,
         success: false,
         error: errorName + ': ' + errorMsg
+      });
+    }
+  }
+
+  // ============================================================================
+  // GET_VARIABLES_DATA - Lazily read or return the plugin-lifetime snapshot
+  // ============================================================================
+  else if (msg.type === 'GET_VARIABLES_DATA') {
+    try {
+      var variablesData = await __getVariablesSnapshot(false, msg.requestId);
+      figma.ui.postMessage({
+        type: 'GET_VARIABLES_DATA_RESULT',
+        requestId: msg.requestId,
+        success: true,
+        data: variablesData
+      });
+    } catch (error) {
+      console.error('🌉 [Desktop Bridge] Get variables error:', error);
+      figma.ui.postMessage({
+        type: 'GET_VARIABLES_DATA_RESULT',
+        requestId: msg.requestId,
+        success: false,
+        error: error.message || String(error)
       });
     }
   }
@@ -852,6 +909,7 @@ figma.ui.onmessage = async (msg) => {
 
       // Set the value for the specified mode
       variable.setValueForMode(msg.modeId, value);
+      __invalidateVariablesSnapshot();
 
       console.log('🌉 [Desktop Bridge] Variable updated successfully');
 
@@ -910,6 +968,7 @@ figma.ui.onmessage = async (msg) => {
       if (msg.scopes) {
         variable.scopes = msg.scopes;
       }
+      __invalidateVariablesSnapshot();
 
       console.log('🌉 [Desktop Bridge] Variable created:', variable.id);
 
@@ -952,6 +1011,7 @@ figma.ui.onmessage = async (msg) => {
           collection.addMode(msg.additionalModes[i]);
         }
       }
+      __invalidateVariablesSnapshot();
 
       console.log('🌉 [Desktop Bridge] Collection created:', collection.id);
 
@@ -991,6 +1051,7 @@ figma.ui.onmessage = async (msg) => {
       };
 
       variable.remove();
+      __invalidateVariablesSnapshot();
 
       console.log('🌉 [Desktop Bridge] Variable deleted');
 
@@ -1031,6 +1092,7 @@ figma.ui.onmessage = async (msg) => {
       };
 
       collection.remove();
+      __invalidateVariablesSnapshot();
 
       console.log('🌉 [Desktop Bridge] Collection deleted');
 
@@ -1066,6 +1128,7 @@ figma.ui.onmessage = async (msg) => {
 
       var oldName = variable.name;
       variable.name = msg.newName;
+      __invalidateVariablesSnapshot();
 
       console.log('🌉 [Desktop Bridge] Variable renamed from "' + oldName + '" to "' + msg.newName + '"');
 
@@ -1103,6 +1166,7 @@ figma.ui.onmessage = async (msg) => {
       }
 
       variable.description = msg.description || '';
+      __invalidateVariablesSnapshot();
 
       console.log('🌉 [Desktop Bridge] Variable description set successfully');
 
@@ -1139,6 +1203,7 @@ figma.ui.onmessage = async (msg) => {
 
       // Add the mode (returns the new mode ID)
       var newModeId = collection.addMode(msg.modeName);
+      __invalidateVariablesSnapshot();
 
       console.log('🌉 [Desktop Bridge] Mode "' + msg.modeName + '" added with ID:', newModeId);
 
@@ -1184,6 +1249,7 @@ figma.ui.onmessage = async (msg) => {
 
       var oldName = currentMode.name;
       collection.renameMode(msg.modeId, msg.newName);
+      __invalidateVariablesSnapshot();
 
       console.log('🌉 [Desktop Bridge] Mode renamed from "' + oldName + '" to "' + msg.newName + '"');
 
@@ -1215,22 +1281,9 @@ figma.ui.onmessage = async (msg) => {
     try {
       console.log('🌉 [Desktop Bridge] Refreshing variables data...');
 
-      var variables = await __benchmarkMeasure('local-variable-retrieval', msg.requestId, function() {
-        return figma.variables.getLocalVariablesAsync();
-      }, { api: 'figma.variables.getLocalVariablesAsync' });
-      var collections = await __benchmarkMeasure('variable-collection-retrieval', msg.requestId, function() {
-        return figma.variables.getLocalVariableCollectionsAsync();
-      }, { api: 'figma.variables.getLocalVariableCollectionsAsync' });
-
-      var variablesData = __benchmarkMeasureSync('variable-mapping-serialization', msg.requestId, function() {
-        return {
-          success: true,
-          timestamp: Date.now(),
-          fileKey: figma.fileKey || null,
-          variables: variables.map(serializeVariable),
-          variableCollections: collections.map(serializeCollection)
-        };
-      }, { variableCount: variables.length, collectionCount: collections.length });
+      // A refresh deliberately bypasses the plugin-lifetime snapshot. The
+      // successful live result becomes the replacement snapshot.
+      var variablesData = await __getVariablesSnapshot(true, msg.requestId);
 
       // Update the UI's cached data
       figma.ui.postMessage({
@@ -1246,7 +1299,7 @@ figma.ui.onmessage = async (msg) => {
         data: variablesData
       });
 
-      console.log('🌉 [Desktop Bridge] Variables refreshed:', variables.length, 'variables in', collections.length, 'collections');
+      console.log('🌉 [Desktop Bridge] Variables refreshed:', variablesData.variables.length, 'variables in', variablesData.variableCollections.length, 'collections');
 
     } catch (error) {
       console.error('🌉 [Desktop Bridge] Refresh variables error:', error);

@@ -108,6 +108,8 @@ export interface RegisterTokensToolsOptions {
    * are all Local Mode only.
    */
   isRemoteMode?: boolean;
+  /** Called after an apply phase that may have mutated the Figma document. */
+  onWrite?: () => void;
 }
 
 export function registerExportTokensTool(
@@ -557,7 +559,10 @@ async function handleImport(
       }
     }
 
-    if (anyPhaseRan) applyResult = acc;
+    if (anyPhaseRan) {
+      applyResult = acc;
+      opts.onWrite?.();
+    }
   }
 
   // Slim the diff for the response: full entries blow past LLM context for

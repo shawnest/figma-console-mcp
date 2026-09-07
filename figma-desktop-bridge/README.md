@@ -73,9 +73,9 @@ cd figma-desktop-bridge
 3. **Wait for confirmation:** the status strip turns green and shows `READY`
 
 The plugin will:
-- Fetch all local variables and collections on startup
-- Display counts in the UI (e.g., "Variables: 404 in 2 collections")
-- Store variables in `window.__figmaVariablesData`
+- Load local variables and collections when the first variable command requests them
+- Cache the successful snapshot for the plugin lifetime
+- Store the iframe relay copy in `window.__figmaVariablesData`
 - Provide on-demand component data via `window.requestComponentData(nodeId)`
 - Keep running until manually closed
 
@@ -173,10 +173,10 @@ Click the **Disconnect** button in the Cloud Mode section, or close the plugin. 
 
 ### Plugin Worker (code.js)
 
-**On Startup (Variables):**
-1. Uses Figma's Variables API to fetch all local variables
-2. Formats data with full mode values
-3. Sends to UI via `postMessage`
+**On Request (Variables):**
+1. The first `GET_VARIABLES_DATA` request uses Figma's Variables API to fetch all local variables
+2. Formats data with full mode values and caches the snapshot in the worker
+3. Sends the result to the UI via `postMessage`; later requests reuse the snapshot
 
 **On Request (Components):**
 1. Listens for component requests via `figma.ui.onmessage`
@@ -187,10 +187,11 @@ Click the **Disconnect** button in the Cloud Mode section, or close the plugin. 
 ### Plugin UI (ui.html)
 
 **Variables Flow:**
-1. Listens for `VARIABLES_DATA` message from worker
-2. Stores data on `window.__figmaVariablesData`
-3. Sets `window.__figmaVariablesReady = true`
-4. Displays status to user
+1. Requests the worker snapshot when an MCP client asks for variables
+2. Stores the returned data on `window.__figmaVariablesData`
+3. Clears the relay copy after successful variable writes; the next read is live
+4. Sets `window.__figmaVariablesReady = true` after a successful read
+5. Displays status to user
 
 **Components Flow:**
 1. Exposes `window.requestComponentData(nodeId)` function
@@ -314,7 +315,7 @@ figma-desktop-bridge/
 
 The plugin logs to Figma's console:
 
-**Variables (startup):**
+**Variables (on first request):**
 ```
 🌉 [Desktop Bridge] Plugin loaded and ready
 🌉 [Desktop Bridge] Fetching variables...

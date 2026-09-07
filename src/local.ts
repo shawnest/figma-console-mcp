@@ -35,7 +35,10 @@ import { registerCommentTools } from "./core/comment-tools.js";
 import { registerVersionTools } from "./core/version-tools.js";
 import { registerAnnotationTools } from "./core/annotation-tools.js";
 import { registerDeepComponentTools } from "./core/deep-component-tools.js";
-import { registerDesignSystemTools } from "./core/design-system-tools.js";
+import {
+	DesignSystemKitCache,
+	registerDesignSystemTools,
+} from "./core/design-system-tools.js";
 import { registerLibraryTools, registerLibraryVariableTools } from "./core/library-tools.js";
 import { registerAccessibilityTools } from "./core/accessibility-tools.js";
 import { registerDiagnoseTool } from "./core/diagnose-tool.js";
@@ -143,6 +146,7 @@ class LocalFigmaConsoleMCP {
 			timestamp: number;
 		}
 	> = new Map();
+	private designSystemKitCache = new DesignSystemKitCache();
 
 	// In-memory cache for assembled design-system audit data. The audit fetch
 	// is heavy (full-file component crawl via the bridge, or several REST
@@ -159,11 +163,11 @@ class LocalFigmaConsoleMCP {
 	private static readonly AUDIT_CACHE_TTL_MS = 5 * 60 * 1000;
 
 	/**
-	 * Invalidate the variables cache after a write operation.
-	 * Called after any successful variable create/update/delete/batch operation
-	 * to ensure the next figma_get_variables call returns fresh data.
+	 * Invalidate local read caches after a write operation. This covers both
+	 * variable reads and assembled design-system kit snapshots.
 	 */
 	private invalidateVariablesCache(): void {
+		this.designSystemKitCache.clear();
 		if (this.variablesCache.size > 0) {
 			this.variablesCache.clear();
 			logger.info('Variables cache invalidated after write operation');
@@ -3065,7 +3069,11 @@ Without libraryFileKey/libraryFileUrl, searches the currently open file (local c
 		// Register all write/manipulation tools (figma_execute, variable CRUD, node mutations,
 		// design-token setup, accessibility audits, etc.). Sourced from src/core/write-tools.ts
 		// so local mode and cloud mode share the same 30 implementations — no risk of drift.
-		registerWriteTools(this.server, () => this.getDesktopConnector());
+		registerWriteTools(
+			this.server,
+			() => this.getDesktopConnector(),
+			() => this.invalidateVariablesCache(),
+		);
 
 		// Register cross-file tools (figma_execute_across_files) — run the same
 		// code against every (or a chosen subset of) currently connected files
@@ -3082,7 +3090,9 @@ Without libraryFileKey/libraryFileUrl, searches the currently open file (local c
 		// popular styling methods (DTCG canonical — legacy + 2025.10 dialects —
 		// plus CSS/Tailwind/SCSS/TS/JSON/Style Dictionary/Tokens Studio, all
 		// derived from a single internal token model).
-		registerTokensTools(this.server, () => this.getDesktopConnector());
+		registerTokensTools(this.server, () => this.getDesktopConnector(), {
+			onWrite: () => this.invalidateVariablesCache(),
+		});
 
 		// Register design system extraction tools (figma_ds_*) — scan a
 		// production codebase, mine its de-facto styling into DTCG tokens, and
@@ -3147,6 +3157,7 @@ Without libraryFileKey/libraryFileUrl, searches the currently open file (local c
 			this.variablesCache,
 			undefined, // options (use default)
 			() => this.getDesktopConnector(), // bridge-first variable resolution (works on any plan)
+			this.designSystemKitCache,
 		);
 
 		// Register Library Tools (key-based component inspection across shared libraries)
@@ -3154,7 +3165,11 @@ Without libraryFileKey/libraryFileUrl, searches the currently open file (local c
 
 		// Register Library Variable Tools (Plugin-API based — list + import variables
 		// from subscribed team libraries; works on every Figma plan, no Enterprise needed)
-		registerLibraryVariableTools(this.server, () => this.getDesktopConnector());
+		registerLibraryVariableTools(
+			this.server,
+			() => this.getDesktopConnector(),
+			() => this.invalidateVariablesCache(),
+		);
 
 		// Register code-side accessibility scanning (axe-core + JSDOM)
 		registerAccessibilityTools(this.server);
@@ -3940,7 +3955,7 @@ Without libraryFileKey/libraryFileUrl, searches the currently open file (local c
 					logger.info({ fileKey: data.fileKey, fileName: data.fileName }, "Desktop Bridge plugin connected via WebSocket");
 				});
 
-				// Plugin disconnect leaves cached variables stale — when the plugin reconnects
+				// Plugin disconnect leaves cached design-system data stale — when the plugin reconnects
 				// after a sleep/wake or network blip, the file may have edits we missed
 				// (no DOCUMENT_CHANGE event was delivered while we were disconnected).
 				// Invalidate the cache for the disconnected file so the next read is fresh.
@@ -3950,6 +3965,7 @@ Without libraryFileKey/libraryFileUrl, searches the currently open file (local c
 						this.variablesCache.delete(data.fileKey);
 						// design-system-tools.ts stores token data under a prefixed key
 						this.variablesCache.delete(`vars:${data.fileKey}`);
+						this.designSystemKitCache.invalidate(data.fileKey);
 						void import("./core/design-system-manifest.js").then(
 							({ DesignSystemManifestCache }) => {
 								DesignSystemManifestCache.getInstance().invalidate(data.fileKey);
@@ -3958,7 +3974,7 @@ Without libraryFileKey/libraryFileUrl, searches the currently open file (local c
 					}
 				});
 
-				// Invalidate variable cache when document changes are reported.
+				// Invalidate local design-system read caches when document changes are reported.
 				// Figma's documentchange API doesn't expose a specific variable change type —
 				// variable operations manifest as node PROPERTY_CHANGE events, so we invalidate
 				// on any style or node change to be safe.
@@ -3971,6 +3987,7 @@ Without libraryFileKey/libraryFileUrl, searches the currently open file (local c
 							// and the design-system kit sees edited variables.
 							this.variablesCache.delete(data.fileKey);
 							this.variablesCache.delete(`vars:${data.fileKey}`);
+							this.designSystemKitCache.invalidate(data.fileKey);
 							void import("./core/design-system-manifest.js").then(
 								({ DesignSystemManifestCache }) => {
 									DesignSystemManifestCache.getInstance().invalidate(data.fileKey);
@@ -3978,7 +3995,7 @@ Without libraryFileKey/libraryFileUrl, searches the currently open file (local c
 							).catch(() => {});
 							logger.debug(
 								{ fileKey: data.fileKey, changeCount: data.changeCount, hasStyleChanges: data.hasStyleChanges, hasNodeChanges: data.hasNodeChanges },
-								"Variable cache invalidated due to document changes"
+								"Design-system read caches invalidated due to document changes"
 							);
 						} else {
 							// Unidentified file (event arrived before FILE_INFO handshake completed).

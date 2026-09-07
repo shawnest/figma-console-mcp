@@ -84,7 +84,8 @@ export class WebSocketConnector implements IFigmaConnector {
   }
 
   async getVariablesFromPluginUI(fileKey?: string): Promise<any> {
-    // Request the cached variables data that the plugin UI holds in window.__figmaVariablesData
+    // Ask the plugin worker for its cached snapshot. The first request lazily
+    // reads the Plugin API; later requests are served from the worker cache.
     return this.wsServer.sendCommand('GET_VARIABLES_DATA', {}, 10000, fileKey);
   }
 

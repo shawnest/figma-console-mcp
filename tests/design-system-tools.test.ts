@@ -5,7 +5,11 @@
  * Tests the registerDesignSystemTools() function with a mock McpServer and FigmaAPI.
  */
 
-import { registerDesignSystemTools } from "../src/core/design-system-tools";
+import {
+	assembleDesignSystemKit,
+	DesignSystemKitCache,
+	registerDesignSystemTools,
+} from "../src/core/design-system-tools";
 
 // ============================================================================
 // Mock infrastructure
@@ -633,6 +637,49 @@ describe("Design System Kit Tool", () => {
 				}
 			}
 		});
+
+		it("skips details discarded by compact format", async () => {
+			const tool = server._getTool("figma_get_design_system_kit");
+			const result = await tool.handler({
+				include: ["tokens", "components", "styles"],
+				format: "compact",
+				includeImages: true,
+			});
+
+			const data = JSON.parse(result.content[0].text);
+
+			// Compact still fetches shallow component nodes for property definitions,
+			// but does not fetch style nodes, render images, or compute visual specs.
+			expect(mockApi.getNodes).toHaveBeenCalledTimes(1);
+			expect(mockApi.getNodes.mock.calls[0][2]).toEqual({ depth: 1 });
+			expect(mockApi.getImages).not.toHaveBeenCalled();
+			expect(data.components.items[0].visualSpec).toBeUndefined();
+		});
+
+		it("keeps parent and style details for summary without variant visuals", async () => {
+			const tool = server._getTool("figma_get_design_system_kit");
+			const result = await tool.handler({
+				include: ["components", "styles"],
+				format: "summary",
+				includeImages: true,
+			});
+
+			const data = JSON.parse(result.content[0].text);
+			const buttonSet = data.components.items.find(
+				(item: any) => item.name === "Button",
+			);
+
+			expect(mockApi.getNodes).toHaveBeenCalledTimes(2);
+			expect(
+				mockApi.getNodes.mock.calls.filter(
+					(call: any[]) => call[2]?.depth === 1,
+				),
+			).toHaveLength(1);
+			expect(mockApi.getImages).not.toHaveBeenCalled();
+			expect(buttonSet.visualSpec).toBeDefined();
+			expect(buttonSet.variants[0].visualSpec).toBeUndefined();
+			expect(data.styles.items[0].resolvedValue).toBeDefined();
+		});
 	});
 
 	describe("Error handling", () => {
@@ -713,6 +760,66 @@ describe("Design System Kit Tool", () => {
 	});
 
 	describe("Cache support", () => {
+		it("coalesces identical kit requests and keeps image variants separate", async () => {
+			const cache = new DesignSystemKitCache();
+			const componentOptions = {
+				api: mockApi as any,
+				fileKey: "abc123",
+				include: ["components"] as Array<"components">,
+				includeImages: true,
+				designSystemCache: cache,
+			};
+
+			const [first, second] = await Promise.all([
+				assembleDesignSystemKit(componentOptions),
+				assembleDesignSystemKit(componentOptions),
+			]);
+
+			expect(second).toBe(first);
+			expect(mockApi.getComponents).toHaveBeenCalledTimes(1);
+			expect(mockApi.getComponentSets).toHaveBeenCalledTimes(1);
+			expect(mockApi.getNodes).toHaveBeenCalledTimes(1);
+			expect(mockApi.getImages).toHaveBeenCalledTimes(1);
+
+			await assembleDesignSystemKit({
+				...componentOptions,
+				includeImages: false,
+			});
+			expect(mockApi.getComponents).toHaveBeenCalledTimes(2);
+			expect(mockApi.getImages).toHaveBeenCalledTimes(1);
+		});
+
+		it("invalidates cached kits by file", async () => {
+			const cache = new DesignSystemKitCache();
+			const options = {
+				api: mockApi as any,
+				fileKey: "abc123",
+				include: ["components"] as Array<"components">,
+				designSystemCache: cache,
+			};
+
+			await assembleDesignSystemKit(options);
+			cache.invalidate("abc123");
+			await assembleDesignSystemKit(options);
+
+			expect(mockApi.getComponents).toHaveBeenCalledTimes(2);
+			expect(mockApi.getComponentSets).toHaveBeenCalledTimes(2);
+		});
+
+		it("expires kit snapshots after the cache TTL", () => {
+			const cache = new DesignSystemKitCache();
+			const kit = {
+				fileKey: "abc123",
+				generatedAt: "2026-01-01T00:00:00.000Z",
+				format: "full" as const,
+				ai_instruction: "",
+			};
+
+			cache.set("stale", "abc123", kit, 100);
+
+			expect(cache.get("stale", 100 + DesignSystemKitCache.TTL_MS)).toBeUndefined();
+		});
+
 		it("uses cached variables data when available", async () => {
 			const cache = new Map<string, { data: any; timestamp: number }>();
 			cache.set("vars:abc123", {

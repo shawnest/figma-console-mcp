@@ -673,6 +673,14 @@
     window.__figmaComponentRequests = new Map();
     window.__figmaPendingRequests = new Map();
 
+    // The worker owns the authoritative snapshot. This iframe copy is only a
+    // relay optimization for newly connected WebSocket clients and is cleared
+    // after every successful variable write.
+    function invalidateVariablesDataCache() {
+      window.__figmaVariablesData = null;
+      window.__figmaVariablesReady = false;
+    }
+
     let requestIdCounter = 0;
 
     // Status inputs owned by the message handler at the bottom of this file.
@@ -1602,11 +1610,13 @@
         'LINT_DESIGN': function(params) { return window.lintDesign(params.nodeId, params.rules, params.maxDepth, params.maxFindings); },
         'AUDIT_COMPONENT_ACCESSIBILITY': function(params) { return window.auditComponentAccessibility(params.nodeId, params.targetSize); },
         'GET_VARIABLES_DATA': function() {
-          // Return the cached variables data directly
-          if (window.__figmaVariablesReady && window.__figmaVariablesData) {
-            return Promise.resolve(window.__figmaVariablesData);
-          }
-          return Promise.reject(new Error('Variables data not ready. Make sure the Desktop Bridge plugin has loaded.'));
+          // The worker owns the cache and performs the first Plugin API read on
+          // demand. The iframe copy is populated by GET_VARIABLES_DATA_RESULT.
+          return window.sendPluginCommand('GET_VARIABLES_DATA', {}).then(function(result) {
+            // Preserve the historical connector contract: variables live at
+            // the top level of the command result, not under result.data.
+            return result && result.data && result.data.variables ? result.data : result;
+          });
         },
         'GET_FILE_INFO': function() {
           return window.sendPluginCommand('GET_FILE_INFO', {});
@@ -3003,37 +3013,58 @@
           break;
 
         // Variable operations
+        case 'GET_VARIABLES_DATA_RESULT':
+          if (msg.success && msg.data) {
+            window.__figmaVariablesData = msg.data;
+            window.__figmaVariablesReady = true;
+            bridgeError = false;
+          }
+          handleResult('GET_VARIABLES_DATA', null);
+          break;
         case 'EXECUTE_CODE_RESULT':
+          // EXECUTE_CODE may contain an arbitrary variable write, including
+          // batched token-import code, so drop the iframe relay copy on both
+          // success and failure (a script may have mutated before throwing).
+          invalidateVariablesDataCache();
           handleResult('EXECUTE_CODE', 'result');
           break;
         case 'UPDATE_VARIABLE_RESULT':
+          if (msg.success) invalidateVariablesDataCache();
           handleResult('UPDATE_VARIABLE', 'variable');
           break;
         case 'CREATE_VARIABLE_RESULT':
+          if (msg.success) invalidateVariablesDataCache();
           handleResult('CREATE_VARIABLE', 'variable');
           break;
         case 'CREATE_VARIABLE_COLLECTION_RESULT':
+          if (msg.success) invalidateVariablesDataCache();
           handleResult('CREATE_VARIABLE_COLLECTION', 'collection');
           break;
         case 'DELETE_VARIABLE_RESULT':
+          if (msg.success) invalidateVariablesDataCache();
           handleResult('DELETE_VARIABLE', 'deleted');
           break;
         case 'DELETE_VARIABLE_COLLECTION_RESULT':
+          if (msg.success) invalidateVariablesDataCache();
           handleResult('DELETE_VARIABLE_COLLECTION', 'deleted');
           break;
         case 'REFRESH_VARIABLES_RESULT':
           handleResult('REFRESH_VARIABLES', null);
           break;
         case 'RENAME_VARIABLE_RESULT':
+          if (msg.success) invalidateVariablesDataCache();
           handleResult('RENAME_VARIABLE', 'variable');
           break;
         case 'SET_VARIABLE_DESCRIPTION_RESULT':
+          if (msg.success) invalidateVariablesDataCache();
           handleResult('SET_VARIABLE_DESCRIPTION', 'variable');
           break;
         case 'ADD_MODE_RESULT':
+          if (msg.success) invalidateVariablesDataCache();
           handleResult('ADD_MODE', 'collection');
           break;
         case 'RENAME_MODE_RESULT':
+          if (msg.success) invalidateVariablesDataCache();
           handleResult('RENAME_MODE', 'collection');
           break;
         case 'GET_LOCAL_COMPONENTS_RESULT':

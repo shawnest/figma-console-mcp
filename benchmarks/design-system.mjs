@@ -237,6 +237,7 @@ async function executeDirect({
 	api,
 	scenario,
 	cache,
+	designSystemCache,
 }) {
 	const operation = api.beginOperation();
 	if (globalThis.gc) globalThis.gc();
@@ -251,6 +252,7 @@ async function executeDirect({
 		includeImages: scenario.args.includeImages,
 		format: scenario.args.format,
 		variablesCache: cache,
+		designSystemCache,
 		now: () => "2026-01-01T00:00:00.000Z",
 	});
 	const responseText = JSON.stringify(kit);
@@ -367,6 +369,7 @@ async function executeMcp({ fixture, api, scenario, mcp }) {
 
 async function runScenario({
 	assembleDesignSystemKit,
+	DesignSystemKitCache,
 	registerDesignSystemTools,
 	McpServer,
 	Client,
@@ -382,6 +385,7 @@ async function runScenario({
 		mode: configuration.latencyMode,
 	});
 	let cache;
+	let designSystemCache;
 	if (scenario.cacheMode === "hit") {
 		cache = new Map();
 		const primeOperation = api.beginOperation();
@@ -396,6 +400,24 @@ async function runScenario({
 		api.endOperation(primeOperation);
 	} else if (scenario.cacheMode === "miss") {
 		cache = new Map();
+	}
+	if (scenario.designSystemCacheMode === "hit") {
+		designSystemCache = new DesignSystemKitCache();
+		const primeOperation = api.beginOperation();
+		await assembleDesignSystemKit({
+			api,
+			fileKey: FILE_KEY,
+			include: scenario.args.include,
+			componentIds: scenario.args.componentIds,
+			includeImages: scenario.args.includeImages,
+			format: scenario.args.format,
+			variablesCache: cache,
+			designSystemCache,
+			now: () => "2026-01-01T00:00:00.000Z",
+		});
+		api.endOperation(primeOperation);
+	} else if (scenario.designSystemCacheMode === "miss") {
+		designSystemCache = new DesignSystemKitCache();
 	}
 
 	const execute = scenario.mcp
@@ -420,6 +442,10 @@ async function runScenario({
 					api,
 					scenario,
 					cache: scenario.cacheMode === "miss" ? new Map() : cache,
+					designSystemCache:
+						scenario.designSystemCacheMode === "miss"
+							? new DesignSystemKitCache()
+							: designSystemCache,
 				});
 
 	for (let index = 0; index < configuration.warmupRuns; index += 1)
@@ -434,18 +460,22 @@ async function runScenario({
 	}
 
 	const wallTimes = samples.map((sample) => sample.wallMs);
+	const scenarioConfiguration = {
+		warmupRuns: configuration.warmupRuns,
+		measuredRuns: configuration.measuredRuns,
+		fixtureVersion: fixture.version,
+		fixtureSeed: fixture.seed,
+		...scenario.args,
+		cacheMode: scenario.cacheMode ?? "none",
+	};
+	if (scenario.designSystemCacheMode) {
+		scenarioConfiguration.designSystemCacheMode = scenario.designSystemCacheMode;
+	}
 	return {
 		name: scenario.name,
 		tier: scenario.tier,
 		path: scenario.mcp ? "mcp-in-memory" : "direct-assembly",
-		configuration: {
-			warmupRuns: configuration.warmupRuns,
-			measuredRuns: configuration.measuredRuns,
-			fixtureVersion: fixture.version,
-			fixtureSeed: fixture.seed,
-			...scenario.args,
-			cacheMode: scenario.cacheMode ?? "none",
-		},
+		configuration: scenarioConfiguration,
 		metrics: {
 			wallMs: roundedSummary(wallTimes),
 			cpuMs: roundedSummary(samples.map((sample) => sample.cpuMs)),
@@ -494,6 +524,10 @@ function scenarioDefinitions(tier) {
 		}),
 		{ ...base("cache-miss", ["tokens"]), cacheMode: "miss" },
 		{ ...base("cache-hit", ["tokens"]), cacheMode: "hit" },
+		{
+			...base("kit-cache-hit", ["tokens", "components", "styles"]),
+			designSystemCacheMode: "hit",
+		},
 		base("full-kit-summary", ["tokens", "components", "styles"], "summary"),
 		base("full-kit-compact", ["tokens", "components", "styles"], "compact"),
 	];
@@ -529,7 +563,11 @@ async function main() {
 	if (configuration.promote) return promoteResult(configuration.promote);
 
 	const [
-		{ assembleDesignSystemKit, registerDesignSystemTools },
+		{
+			assembleDesignSystemKit,
+			DesignSystemKitCache,
+			registerDesignSystemTools,
+		},
 		{ McpServer },
 		{ Client },
 		{ InMemoryTransport },
@@ -552,6 +590,7 @@ async function main() {
 			scenarios.push(
 				await runScenario({
 					assembleDesignSystemKit,
+					DesignSystemKitCache,
 					registerDesignSystemTools,
 					McpServer,
 					Client,
@@ -574,6 +613,7 @@ async function main() {
 	scenarios.push(
 		await runScenario({
 			assembleDesignSystemKit,
+			DesignSystemKitCache,
 			registerDesignSystemTools,
 			McpServer,
 			Client,

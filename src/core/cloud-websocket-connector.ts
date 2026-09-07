@@ -45,6 +45,8 @@ export class CloudWebSocketConnector implements IFigmaConnector {
 	}
 
 	async getVariablesFromPluginUI(fileKey?: string): Promise<any> {
+		// The plugin worker performs the first read lazily and owns the cached
+		// snapshot; this command simply requests that snapshot through the UI.
 		return this.sendCommand('GET_VARIABLES_DATA', {}, 10000);
 	}
 

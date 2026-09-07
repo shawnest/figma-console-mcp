@@ -12,7 +12,35 @@ const logger = createChildLogger({ component: "write-tools" });
 export function registerWriteTools(
 	server: McpServer,
 	getDesktopConnector: () => Promise<any>,
+	onWrite?: () => void,
 ) {
+	if (onWrite) {
+		const rawGetDesktopConnector = getDesktopConnector;
+		getDesktopConnector = async () => {
+			const connector = await rawGetDesktopConnector();
+			return new Proxy(connector, {
+				get(target, property, receiver) {
+					const value = Reflect.get(target, property, receiver);
+					if (
+						typeof value !== "function" ||
+						property === "lintDesign" ||
+						property === "auditComponentAccessibility"
+					) {
+						return value;
+					}
+					return async (...args: any[]) => {
+						const result = await value.apply(target, args);
+						if (
+							!(result && typeof result === "object" && result.success === false)
+						) {
+							onWrite();
+						}
+						return result;
+					};
+				},
+			});
+		};
+	}
 	// ============================================================================
 	// EXECUTION TOOL
 	// ============================================================================

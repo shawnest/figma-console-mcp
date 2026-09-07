@@ -128,6 +128,118 @@ export interface DesignSystemKit {
 	ai_instruction: string;
 }
 
+export interface DesignSystemKitCacheEntry {
+	fileKey: string;
+	data: DesignSystemKit;
+	timestamp: number;
+}
+
+/**
+ * Short-lived cache for complete design-system kit snapshots.
+ *
+ * The cache is deliberately kept outside the assembly function so local mode
+ * can reuse successful reads while cloud/stateless requests remain uncached.
+ * In-flight requests are coalesced to avoid duplicate REST crawls when several
+ * callers ask for the same snapshot at once.
+ */
+export class DesignSystemKitCache {
+	static readonly TTL_MS = 5 * 60 * 1000;
+	static readonly MAX_ENTRIES = 100;
+
+	private readonly entries = new Map<string, DesignSystemKitCacheEntry>();
+	private readonly inFlight = new Map<
+		string,
+		{ fileKey: string; promise: Promise<DesignSystemKit> }
+	>();
+	private readonly fileGenerations = new Map<string, number>();
+	private globalGeneration = 0;
+
+	get(key: string, now = Date.now()): DesignSystemKit | undefined {
+		const entry = this.entries.get(key);
+		if (!entry) return undefined;
+
+		if (now - entry.timestamp >= DesignSystemKitCache.TTL_MS) {
+			this.entries.delete(key);
+			return undefined;
+		}
+
+		return entry.data;
+	}
+
+	set(
+		key: string,
+		fileKey: string,
+		data: DesignSystemKit,
+		timestamp = Date.now(),
+	): void {
+		if (
+			!this.entries.has(key) &&
+			this.entries.size >= DesignSystemKitCache.MAX_ENTRIES
+		) {
+			const oldestKey = this.entries.keys().next().value;
+			if (typeof oldestKey === "string") this.entries.delete(oldestKey);
+		}
+		this.entries.set(key, { fileKey, data, timestamp });
+	}
+
+	getOrCreate(
+		key: string,
+		fileKey: string,
+		factory: () => Promise<DesignSystemKit>,
+	): Promise<DesignSystemKit> {
+		const cached = this.get(key);
+		if (cached) return Promise.resolve(cached);
+
+		const existing = this.inFlight.get(key);
+		if (existing) return existing.promise;
+
+		const generation = this.fileGenerations.get(fileKey) ?? 0;
+		const globalGeneration = this.globalGeneration;
+		let promise: Promise<DesignSystemKit>;
+		promise = factory()
+			.then((data) => {
+				// Error responses and results completed before an invalidation must
+				// never become the next cached snapshot.
+				if (
+					!data.errors?.length &&
+					this.globalGeneration === globalGeneration &&
+					(this.fileGenerations.get(fileKey) ?? 0) === generation
+				) {
+					this.set(key, fileKey, data);
+				}
+				return data;
+			})
+			.finally(() => {
+				if (this.inFlight.get(key)?.promise === promise) {
+					this.inFlight.delete(key);
+				}
+			});
+		this.inFlight.set(key, { fileKey, promise });
+		return promise;
+	}
+
+	invalidate(fileKey: string): void {
+		this.fileGenerations.set(
+			fileKey,
+			(this.fileGenerations.get(fileKey) ?? 0) + 1,
+		);
+		for (const [key, entry] of this.entries) {
+			if (entry.fileKey === fileKey) this.entries.delete(key);
+		}
+		for (const [key, entry] of this.inFlight) {
+			// The promise cannot be cancelled, but removing it ensures a request
+			// started after invalidation does not join the stale operation.
+			if (entry.fileKey === fileKey) this.inFlight.delete(key);
+		}
+	}
+
+	clear(): void {
+		this.globalGeneration++;
+		this.entries.clear();
+		this.inFlight.clear();
+	}
+}
+
 export type DesignSystemKitSection = "tokens" | "components" | "styles";
 export type DesignSystemKitFormat = "full" | "summary" | "compact";
 
@@ -157,9 +269,26 @@ export interface AssembleDesignSystemKitOptions {
 	includeImages?: boolean;
 	format?: DesignSystemKitFormat;
 	variablesCache?: Map<string, { data: any; timestamp: number }>;
+	designSystemCache?: DesignSystemKitCache;
 	getDesktopConnector?: () => Promise<any>;
 	/** Injected by benchmarks/tests when a stable generatedAt is useful. */
 	now?: () => string;
+}
+
+function createDesignSystemKitCacheKey(
+	options: AssembleDesignSystemKitOptions,
+	include: DesignSystemKitSection[],
+): string {
+	return [
+		"design-system-kit:v1",
+		options.fileKey,
+		JSON.stringify({
+			include,
+			componentIds: options.componentIds ?? null,
+			includeImages: options.includeImages ?? false,
+			format: options.format ?? "full",
+		}),
+	].join(":");
 }
 
 /**
@@ -424,63 +553,80 @@ async function resolveStyleValues(
 
 	if (nodeIds.length === 0) return resolved;
 
-	try {
-		const batchSize = 50;
-		for (let i = 0; i < nodeIds.length; i += batchSize) {
-			const batch = nodeIds.slice(i, i + batchSize);
-			const nodeResponse = await withTimeout(
-				api.getNodes(fileKey, batch),
-				30000,
-				`getStyleNodes(batch ${Math.floor(i / batchSize) + 1})`,
-			);
-			if (nodeResponse?.nodes) {
-				for (const [nodeId, nodeData] of Object.entries(nodeResponse.nodes)) {
-					const doc = (nodeData as any)?.document;
-					if (!doc) continue;
-
-					const value: any = {};
-
-					// FILL styles → extract colors
-					if (doc.fills && Array.isArray(doc.fills)) {
-						value.fills = doc.fills
-							.filter((f: any) => f.visible !== false)
-							.map((f: any) => ({
-								type: f.type,
-								color: f.color ? rgbaToHex(f.color) : undefined,
-								opacity: f.opacity,
-							}));
+	const batchSize = 50;
+	const nodeResponses = await Promise.all(
+		Array.from(
+			{ length: Math.ceil(nodeIds.length / batchSize) },
+			(_, batchIndex) => {
+				const batch = nodeIds.slice(
+					batchIndex * batchSize,
+					(batchIndex + 1) * batchSize,
+				);
+				return (async () => {
+					try {
+						return await withTimeout(
+							api.getNodes(fileKey, batch),
+							30000,
+							`getStyleNodes(batch ${batchIndex + 1})`,
+						);
+					} catch (err) {
+						logger.warn(
+							{ error: err, batch: batchIndex + 1 },
+							"Failed to resolve style node batch",
+						);
+						return null;
 					}
+				})();
+			},
+		),
+	);
 
-					// TEXT styles → extract typography
-					if (doc.type === "TEXT" && doc.style) {
-						value.typography = {
-							fontFamily: doc.style.fontFamily,
-							fontSize: doc.style.fontSize,
-							fontWeight: doc.style.fontWeight,
-							lineHeight: doc.style.lineHeightPx,
-							letterSpacing: doc.style.letterSpacing,
-						};
-					}
+	for (const nodeResponse of nodeResponses) {
+		if (nodeResponse?.nodes) {
+			for (const [nodeId, nodeData] of Object.entries(nodeResponse.nodes)) {
+				const doc = (nodeData as any)?.document;
+				if (!doc) continue;
 
-					// EFFECT styles → extract shadows/blurs
-					if (doc.effects && Array.isArray(doc.effects)) {
-						value.effects = doc.effects
-							.filter((e: any) => e.visible !== false)
-							.map((e: any) => ({
-								type: e.type,
-								color: e.color ? rgbaToHex(e.color) : undefined,
-								offset: e.offset,
-								radius: e.radius,
-								spread: e.spread,
-							}));
-					}
+				const value: any = {};
 
-					resolved.set(nodeId, value);
+				// FILL styles → extract colors
+				if (doc.fills && Array.isArray(doc.fills)) {
+					value.fills = doc.fills
+						.filter((f: any) => f.visible !== false)
+						.map((f: any) => ({
+							type: f.type,
+							color: f.color ? rgbaToHex(f.color) : undefined,
+							opacity: f.opacity,
+						}));
 				}
+
+				// TEXT styles → extract typography
+				if (doc.type === "TEXT" && doc.style) {
+					value.typography = {
+						fontFamily: doc.style.fontFamily,
+						fontSize: doc.style.fontSize,
+						fontWeight: doc.style.fontWeight,
+						lineHeight: doc.style.lineHeightPx,
+						letterSpacing: doc.style.letterSpacing,
+					};
+				}
+
+				// EFFECT styles → extract shadows/blurs
+				if (doc.effects && Array.isArray(doc.effects)) {
+					value.effects = doc.effects
+						.filter((e: any) => e.visible !== false)
+						.map((e: any) => ({
+							type: e.type,
+							color: e.color ? rgbaToHex(e.color) : undefined,
+							offset: e.offset,
+							radius: e.radius,
+							spread: e.spread,
+						}));
+				}
+
+				resolved.set(nodeId, value);
 			}
 		}
-	} catch (err) {
-		logger.warn({ error: err }, "Failed to resolve style values");
 	}
 
 	return resolved;
@@ -493,23 +639,34 @@ function groupVariablesByCollection(formatted: {
 	collections: any[];
 	variables: any[];
 }): TokenCollection[] {
-	return formatted.collections.map((collection) => {
-		const collectionVars = formatted.variables
-			.filter((v) => v.variableCollectionId === collection.id)
-			.map((v) => ({
-				id: v.id,
-				name: v.name,
-				type: v.resolvedType,
-				description: v.description || undefined,
-				valuesByMode: v.valuesByMode,
-				scopes: v.scopes,
-			}));
+	const variablesByCollection = new Map<
+		string,
+		TokenCollection["variables"]
+	>();
+	for (const variable of formatted.variables) {
+		if (typeof variable.variableCollectionId !== "string") continue;
+		const collectionVariables = variablesByCollection.get(
+			variable.variableCollectionId,
+		);
+		const mappedVariable = {
+			id: variable.id,
+			name: variable.name,
+			type: variable.resolvedType,
+			description: variable.description || undefined,
+			valuesByMode: variable.valuesByMode,
+			scopes: variable.scopes,
+		};
+		if (collectionVariables) collectionVariables.push(mappedVariable);
+		else
+			variablesByCollection.set(variable.variableCollectionId, [mappedVariable]);
+	}
 
+	return formatted.collections.map((collection) => {
 		return {
 			id: collection.id,
 			name: collection.name,
 			modes: collection.modes,
-			variables: collectionVars,
+			variables: variablesByCollection.get(collection.id) || [],
 		};
 	});
 }
@@ -700,6 +857,22 @@ function compressKit(
 export async function assembleDesignSystemKit(
 	options: AssembleDesignSystemKitOptions,
 ): Promise<DesignSystemKit> {
+	const include = options.include ?? ["tokens", "components", "styles"];
+	if (options.designSystemCache) {
+		const cacheKey = createDesignSystemKitCacheKey(options, include);
+		return options.designSystemCache.getOrCreate(
+			cacheKey,
+			options.fileKey,
+			() => assembleDesignSystemKitUncached({ ...options, include }),
+		);
+	}
+
+	return assembleDesignSystemKitUncached(options);
+}
+
+async function assembleDesignSystemKitUncached(
+	options: AssembleDesignSystemKitOptions,
+): Promise<DesignSystemKit> {
 	const {
 		api,
 		fileKey,
@@ -786,6 +959,32 @@ export async function assembleDesignSystemKit(
 						componentSetsResponse?.meta?.component_sets || [];
 					const { components: standaloneComponents, componentSets } =
 						deduplicateComponents(allComponents, allComponentSets);
+					const componentsBySetId = new Map<string, any[]>();
+					const addComponentToSetIndex = (
+						setId: unknown,
+						component: any,
+					): void => {
+						if (typeof setId !== "string" || setId.length === 0) return;
+						const components = componentsBySetId.get(setId);
+						if (components) components.push(component);
+						else componentsBySetId.set(setId, [component]);
+					};
+					for (const component of allComponents) {
+						const componentSetId = component.component_set_id;
+						const containingFrameId = component.containing_frame?.nodeId;
+						const containingComponentSetId =
+							component.containing_frame?.containingComponentSet?.nodeId;
+						addComponentToSetIndex(componentSetId, component);
+						if (containingFrameId !== componentSetId) {
+							addComponentToSetIndex(containingFrameId, component);
+						}
+						if (
+							containingComponentSetId !== componentSetId &&
+							containingComponentSetId !== containingFrameId
+						) {
+							addComponentToSetIndex(containingComponentSetId, component);
+						}
+					}
 					let targetComponents = standaloneComponents;
 					let targetSets = componentSets;
 
@@ -800,30 +999,46 @@ export async function assembleDesignSystemKit(
 					}
 
 					const componentSpecs: ComponentSpec[] = [];
+					const needsComponentVisuals = format !== "compact";
+					const needsVariantVisuals = format === "full";
 					const allNodeIds = [
 						...targetSets.map((set: any) => set.node_id),
 						...targetComponents.map((component: any) => component.node_id),
 					];
+					const nodeDepth = needsVariantVisuals ? 2 : 1;
 					const nodeDetailsMap: Record<string, any> = {};
 					const batchSize = 50;
-					for (let i = 0; i < allNodeIds.length; i += batchSize) {
-						const batch = allNodeIds.slice(i, i + batchSize);
-						try {
-							const nodeResponse = await withTimeout(
-								requestApi.getNodes(fileKey, batch, { depth: 2 }),
-								30000,
-								`getNodes(batch ${Math.floor(i / batchSize) + 1})`,
-							);
-							if (nodeResponse?.nodes) {
-								for (const [nodeId, nodeData] of Object.entries(
-									nodeResponse.nodes,
-								)) {
-									nodeDetailsMap[nodeId] = (nodeData as any)?.document;
-								}
+					const nodeResponses = await Promise.all(
+						Array.from(
+							{ length: Math.ceil(allNodeIds.length / batchSize) },
+							(_, batchIndex) => {
+								const batch = allNodeIds.slice(
+									batchIndex * batchSize,
+									(batchIndex + 1) * batchSize,
+								);
+								return (async () => {
+									try {
+										return await withTimeout(
+											requestApi.getNodes(fileKey, batch, { depth: nodeDepth }),
+											30000,
+											`getNodes(batch ${batchIndex + 1})`,
+										);
+									} catch (err) {
+										// Match the previous behavior: a failed detail batch does not discard
+										// the component inventory returned by the metadata endpoints.
+										return null;
+									}
+								})();
+							},
+						),
+					);
+					for (const nodeResponse of nodeResponses) {
+						if (nodeResponse?.nodes) {
+							for (const [nodeId, nodeData] of Object.entries(
+								nodeResponse.nodes,
+							)) {
+								nodeDetailsMap[nodeId] = (nodeData as any)?.document;
 							}
-						} catch (err) {
-							// Match the previous behavior: a failed detail batch does not discard
-							// the component inventory returned by the metadata endpoints.
 						}
 					}
 
@@ -834,44 +1049,42 @@ export async function assembleDesignSystemKit(
 							description: set.description || undefined,
 						};
 						const setNode = nodeDetailsMap[set.node_id];
-						const variants = allComponents
-							.filter(
-								(component: any) =>
-									component.component_set_id === set.node_id ||
-									component.containing_frame?.nodeId === set.node_id ||
-									component.containing_frame?.containingComponentSet?.nodeId ===
-										set.node_id,
-							)
-							.map((component: any) => {
+						const variants = (componentsBySetId.get(set.node_id) || []).map(
+							(component: any) => {
 								const entry: {
 									name: string;
 									id: string;
 									visualSpec?: VisualSpec;
 									visualSpecDelta?: Record<string, any>;
 								} = { name: component.name, id: component.node_id };
-								const variantNode = setNode?.children?.find(
-									(child: any) => child.id === component.node_id,
-								);
-								const visualSpec = extractVisualSpec(variantNode);
-								if (visualSpec) entry.visualSpec = visualSpec;
+								if (needsVariantVisuals) {
+									const variantNode = setNode?.children?.find(
+										(child: any) => child.id === component.node_id,
+									);
+									const visualSpec = extractVisualSpec(variantNode);
+									if (visualSpec) entry.visualSpec = visualSpec;
+								}
 								return entry;
-							});
+							},
+						);
 
 						if (variants.length > 0) {
-							deltaEncodeVariantSpecs(variants);
+							if (needsVariantVisuals) deltaEncodeVariantSpecs(variants);
 							spec.variants = variants;
 						}
 						if (setNode?.componentPropertyDefinitions) {
 							spec.properties = setNode.componentPropertyDefinitions;
 						}
-						if (setNode?.absoluteBoundingBox) {
+						if (needsComponentVisuals && setNode?.absoluteBoundingBox) {
 							spec.bounds = {
 								width: setNode.absoluteBoundingBox.width,
 								height: setNode.absoluteBoundingBox.height,
 							};
 						}
-						const visualSpec = extractVisualSpec(setNode);
-						if (visualSpec) spec.visualSpec = visualSpec;
+						if (needsComponentVisuals) {
+							const visualSpec = extractVisualSpec(setNode);
+							if (visualSpec) spec.visualSpec = visualSpec;
+						}
 						componentSpecs.push(spec);
 					}
 
@@ -885,41 +1098,72 @@ export async function assembleDesignSystemKit(
 						if (node?.componentPropertyDefinitions) {
 							spec.properties = node.componentPropertyDefinitions;
 						}
-						if (node?.absoluteBoundingBox) {
+						if (needsComponentVisuals && node?.absoluteBoundingBox) {
 							spec.bounds = {
 								width: node.absoluteBoundingBox.width,
 								height: node.absoluteBoundingBox.height,
 							};
 						}
-						const visualSpec = extractVisualSpec(node);
-						if (visualSpec) spec.visualSpec = visualSpec;
+						if (needsComponentVisuals) {
+							const visualSpec = extractVisualSpec(node);
+							if (visualSpec) spec.visualSpec = visualSpec;
+						}
 						componentSpecs.push(spec);
 					}
 
-					if (includeImages && componentSpecs.length > 0) {
-						try {
-							for (let i = 0; i < componentSpecs.length; i += batchSize) {
-								const batch = componentSpecs
-									.slice(i, i + batchSize)
-									.map((component) => component.id);
-								const imagesResult = await withTimeout(
-									requestApi.getImages(fileKey, batch, {
-										scale: 2,
-										format: "png",
-									}),
-									30000,
-									"getImages",
-								);
-								if (imagesResult?.images) {
-									for (const spec of componentSpecs) {
-										const url = imagesResult.images[spec.id];
-										if (url) spec.imageUrl = url;
-									}
+					// Summary and compact compression always remove image URLs, so avoid
+					// rendering them when the requested format cannot return them.
+					if (
+						includeImages &&
+						format === "full" &&
+						componentSpecs.length > 0
+					) {
+						const imageResults = await Promise.all(
+							Array.from(
+								{ length: Math.ceil(componentSpecs.length / batchSize) },
+								(_, batchIndex) => {
+									const batch = componentSpecs
+										.slice(batchIndex * batchSize, (batchIndex + 1) * batchSize)
+										.map((component) => component.id);
+									return (async (): Promise<{
+										images?: Record<string, string | null>;
+										error?: string;
+									}> => {
+										try {
+											const imagesResult = await withTimeout(
+												requestApi.getImages(fileKey, batch, {
+													scale: 2,
+													format: "png",
+												}),
+												30000,
+												`getImages(batch ${batchIndex + 1})`,
+											);
+											return { images: imagesResult?.images };
+										} catch (err) {
+											return {
+												error: err instanceof Error ? err.message : String(err),
+											};
+										}
+									})();
+								},
+							),
+						);
+
+						for (const result of imageResults) {
+							if (result.images) {
+								for (const spec of componentSpecs) {
+									const url = result.images[spec.id];
+									if (url) spec.imageUrl = url;
 								}
 							}
-						} catch (err) {
-							const message = err instanceof Error ? err.message : String(err);
-							errors.push({ section: "component_images", message });
+						}
+
+						const firstImageError = imageResults.find((result) => result.error);
+						if (firstImageError?.error) {
+							errors.push({
+								section: "component_images",
+								message: firstImageError.error,
+							});
 						}
 					}
 
@@ -955,7 +1199,7 @@ export async function assembleDesignSystemKit(
 						description: style.description || undefined,
 						nodeId: style.node_id,
 					}));
-					if (styleSpecs.length > 0) {
+					if (format !== "compact" && styleSpecs.length > 0) {
 						const resolvedValues = await resolveStyleValues(
 							requestApi,
 							fileKey,
@@ -1070,6 +1314,7 @@ export function registerDesignSystemTools(
 	variablesCache?: Map<string, { data: any; timestamp: number }>,
 	options?: { isRemoteMode?: boolean },
 	getDesktopConnector?: () => Promise<any>,
+	designSystemCache?: DesignSystemKitCache,
 ): void {
 	server.tool(
 		"figma_get_design_system_kit",
@@ -1147,6 +1392,7 @@ export function registerDesignSystemTools(
 					format,
 					variablesCache,
 					getDesktopConnector,
+					designSystemCache,
 				});
 				return {
 					content: [{ type: "text", text: JSON.stringify(assembled) }],
