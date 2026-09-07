@@ -1060,6 +1060,7 @@
               editorType: plugin.editorType || null,
               pluginVersion: plugin.pluginVersion || null,
               fileKey: plugin.fileKey || null,
+              fileUrl: plugin.fileUrl || (plugin.fileKey ? ('https://www.figma.com/design/' + plugin.fileKey) : null),
               fileName: plugin.fileName || null,
               activePage: plugin.activePage || null,
               fixtureVersion: metadata.fixtureVersion,
@@ -1775,6 +1776,13 @@
        * Initialize a new connection to a server: send FILE_INFO, variables, attach handlers.
        */
       function initializeConnection(connWs, port) {
+        // Activate document-change tracking once an MCP/cloud client is
+        // actually connected. Do not wait for all-page loading before FILE_INFO.
+        window.sendPluginCommand('ENSURE_DOCUMENT_CHANGE_TRACKING', {}, 120000)
+          .catch(function(err) {
+            console.warn('[MCP Bridge] Document change tracking not activated:', err && err.message ? err.message : String(err));
+          });
+
         // Forward cached variables if available
         if (window.__figmaVariablesReady && window.__figmaVariablesData) {
           sendWsMessage(connWs, {
@@ -2489,6 +2497,7 @@
       'CLEAR_CONSOLE': 'Clear console',
       'RELOAD_UI': 'Reload UI',
       'GET_VARIABLES_DATA': 'Get variables data',
+      'ENSURE_DOCUMENT_CHANGE_TRACKING': null, // internal, don't log
       'RESIZE_UI': null // internal, don't log
     };
 
@@ -3290,6 +3299,10 @@
           break;
         case 'GET_ANNOTATION_CATEGORIES_RESULT':
           handleResult('GET_ANNOTATION_CATEGORIES', null);
+          break;
+
+        case 'ENSURE_DOCUMENT_CHANGE_TRACKING_RESULT':
+          handleResult('ENSURE_DOCUMENT_CHANGE_TRACKING', null);
           break;
 
         // Document change events (for cache invalidation via WebSocket)

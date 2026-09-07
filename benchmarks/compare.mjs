@@ -253,7 +253,8 @@ function metricDirection(metricPath) {
 	if (
 		metricName.includes("throughput") ||
 		metricName.includes("persecond") ||
-		metricName.includes("success")
+		metricName.includes("success") ||
+		metricName.includes("listenersduringeval")
 	) {
 		return "higher";
 	}

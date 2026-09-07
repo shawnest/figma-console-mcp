@@ -73,6 +73,8 @@ cd figma-desktop-bridge
 3. **Wait for confirmation:** the status strip turns green and shows `READY`
 
 The plugin will:
+- Register selection and current-page listeners immediately, without waiting for other pages
+- Load every page and start document-change tracking when the first local MCP or cloud client connects
 - Load local variables and collections when the first variable command requests them
 - Cache the successful snapshot for the plugin lifetime
 - Store the iframe relay copy in `window.__figmaVariablesData`
@@ -81,7 +83,7 @@ The plugin will:
 
 ### Manual performance benchmark (opt-in)
 
-Expand the `+` menu and open `Benchmark` only when collecting a controlled manual run. `Start` enables structured timing capture, `Run sample` exercises variable refresh, all-page component traversal, and the local WebSocket ping, and `Export JSON` downloads the worker/UI timing entries. Normal operation keeps capture disabled and command result shapes unchanged. Use the [controlled fixture procedure](../docs/performance-benchmark-plugin-fixture.md) for repeatable tiers and metadata.
+Expand the `+` menu and open `Benchmark` only when collecting a controlled manual run. `Start` enables structured timing capture, `Run sample` exercises variable refresh, all-page component traversal, and the local WebSocket ping, and `Export JSON` downloads the worker/UI timing entries. Normal operation keeps capture disabled and command result shapes unchanged. Use the dedicated [Benchmark](https://www.figma.com/design/fRMASslPXRlRqMw0jA2wQk/Benchmark?node-id=0-1) file and the [controlled fixture procedure](../docs/performance-benchmark-plugin-fixture.md) for repeatable tiers and metadata.
 
 ### Accessing Data via MCP
 

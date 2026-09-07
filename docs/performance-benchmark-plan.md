@@ -200,6 +200,7 @@ We can measure the work that mocks cannot reproduce: Figma Plugin API calls, pag
   - unique-font discovery and font loading.
 - Add a benchmark command or plugin UI action that exports results as JSON.
 - Create and document a controlled Figma fixture with fixed tiers:
+  - dedicated empty host file [Benchmark](https://www.figma.com/design/fRMASslPXRlRqMw0jA2wQk/Benchmark?node-id=0-1) (`fRMASslPXRlRqMw0jA2wQk`);
   - variable counts: 10, 100, 1,000, and 5,000;
   - page counts: 5, 25, and 100;
   - representative component sets, instances, and text nodes.
@@ -298,7 +299,7 @@ For each experiment, collect the applicable baseline and candidate results on th
 
 ## Definition of done
 
-- `npm run benchmark` produces deterministic startup, transport, and design-system results.
+- `npm run benchmark` produces deterministic startup, transport, design-system, and plugin-startup results.
 - The benchmark suite validates output correctness as well as timing.
 - A documented manual procedure produces real-Figma plugin results.
 - Results can be compared automatically and summarized in Markdown.

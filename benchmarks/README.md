@@ -86,11 +86,27 @@ The default is one warm-up and 20 measured runs per scenario. Results are writte
 node benchmarks/design-system.mjs --promote benchmarks/results/<timestamp>/design-system.json
 ```
 
+## Plugin worker startup
+
+The suite evaluates `figma-desktop-bridge/code.js` in a Node VM with a fake Plugin API. `loadAllPagesAsync()` is delayed by 5 ms per page at the 5/25/100-page tiers so listener-ready time is attributable without Figma Desktop:
+
+```sh
+npm run benchmark:plugin-startup
+```
+
+Each scenario records evaluation time, selection/page listener ready time, change-tracking activation time, and how many times `loadAllPagesAsync` ran before and after the first connection. Duplicate listeners or a startup-path page load fail the run. Promote a selected result with:
+
+```sh
+node benchmarks/plugin-startup.mjs --promote benchmarks/results/<timestamp>/plugin-startup.json
+```
+
+Do not compare these simulated page-load delays with manual Figma Benchmark panel exports.
+
 ## Manual Figma Plugin instrumentation
 
 Slice 4 is intentionally manual and machine-specific. The bridge's Benchmark panel is opt-in and exports structured Plugin worker, UI iframe, postMessage, JSON, font, and WebSocket timing entries as a downloaded JSON file. It does not run in CI or change normal command result shapes.
 
-Follow [the controlled fixture procedure](../docs/performance-benchmark-plugin-fixture.md). The fixture generator is [figma-plugin-fixture.js](fixtures/figma-plugin-fixture.js); use it in a fresh Figma file for the 10/100/1,000/5,000-variable and 5/25/100-page tiers, then reopen the file when measuring a freshly-opened run.
+Follow [the controlled fixture procedure](../docs/performance-benchmark-plugin-fixture.md). The empty host is the dedicated [Benchmark](https://www.figma.com/design/fRMASslPXRlRqMw0jA2wQk/Benchmark?node-id=0-1) file (`fRMASslPXRlRqMw0jA2wQk`; see [figma-plugin-host.json](fixtures/figma-plugin-host.json)). Duplicate that one-page file, then run [figma-plugin-fixture.js](fixtures/figma-plugin-fixture.js) through `figma_execute` for the 10/100/1,000/5,000-variable and 5/25/100-page tiers. Reopen the generated file when measuring a freshly-opened run. Do not compare these manual results with the deterministic Node suites.
 
 The UI sample runs the existing variable refresh and local-component traversal handlers, then sends a benchmark-only WebSocket ping if an MCP server is connected. Exercise one normal text/component operation as described in the procedure to capture unique-font discovery and font loading before exporting. Fill in the Figma Desktop version, fixture tier, and freshly-opened flag in the panel so the JSON remains repeatable and attributable.
 
@@ -119,6 +135,7 @@ Promote a selected result explicitly; normal benchmark commands never update bas
 node benchmarks/mcp-startup.mjs --promote benchmarks/results/<timestamp>/mcp-startup.json
 node benchmarks/websocket-transport.mjs --promote benchmarks/results/<timestamp>/websocket-transport.json
 node benchmarks/design-system.mjs --promote benchmarks/results/<timestamp>/design-system.json
+node benchmarks/plugin-startup.mjs --promote benchmarks/results/<timestamp>/plugin-startup.json
 ```
 
 Committed baseline policy is documented in [benchmarks/baselines/README.md](baselines/README.md). Baselines are deliberately promoted representative results; raw timestamped results remain local unless a raw run is specifically needed for audit or historical analysis.
@@ -138,7 +155,8 @@ CI is report-only for timing and memory until runner variance has been observed.
 - startup catalog output must be at most 200,000 UTF-8 bytes;
 - each design-system scenario may make at most 64 REST requests;
 - compact design-system responses must be at most 100 KiB;
-- the transport suite must leave no pending requests, release its port, and clean up the server, sockets, and supported active handles.
+- the transport suite must leave no pending requests, release its port, and clean up the server, sockets, and supported active handles;
+- plugin-startup must not call `loadAllPagesAsync` during worker evaluation, must register selection listeners during evaluation, and must not register `documentchange` until activation.
 
 The smoke result configuration records these limits. A failed gate exits non-zero; timing and memory remain diagnostic fields until a documented CI history supports conservative thresholds.
 

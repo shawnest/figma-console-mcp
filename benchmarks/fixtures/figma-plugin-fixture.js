@@ -1,10 +1,13 @@
 /**
  * Controlled Figma fixture generator for the manual Plugin API benchmark.
  *
- * Run this source through the Desktop Bridge's figma_execute in a fresh,
- * unsaved Figma file. Edit CONFIG for one tier at a time. The script does not
- * remove existing pages or variables; starting from a fresh file keeps the
- * counts reproducible and makes the "freshly opened" flag meaningful.
+ * Run this source through the Desktop Bridge's figma_execute in the dedicated
+ * empty Benchmark file (see figma-plugin-host.json), or in any other file that
+ * still has exactly one page. Edit CONFIG for one tier at a time. The script
+ * does not remove existing pages or variables; starting from a one-page empty
+ * host keeps the counts reproducible and makes the "freshly opened" flag
+ * meaningful. Duplicate the empty host before each tier; do not re-run this
+ * generator after pages or variables already exist.
  */
 const CONFIG = {
   fixtureVersion: 'ds-fixture-v1',
@@ -44,9 +47,15 @@ const collections = [
   figma.variables.createVariableCollection('Benchmark/Spacing'),
   figma.variables.createVariableCollection('Benchmark/Typography'),
 ];
+let darkModeAvailable = true;
 for (const collection of collections) {
   collection.renameMode(collection.modes[0].modeId, 'Base');
-  collection.addMode('Dark');
+  try {
+    collection.addMode('Dark');
+  } catch {
+    // Starter/free plans allow only one mode per collection.
+    darkModeAvailable = false;
+  }
 }
 
 const resolvedTypes = ['COLOR', 'FLOAT', 'STRING', 'BOOLEAN'];
@@ -68,7 +77,7 @@ for (let i = 0; i < CONFIG.variableCount; i++) {
     resolvedType,
   );
   const baseModeId = collection.modes[0].modeId;
-  const darkModeId = collection.modes[1].modeId;
+  const darkModeId = collection.modes[1] ? collection.modes[1].modeId : null;
   let baseValue;
   let darkValue;
   if (resolvedType === 'COLOR') {
@@ -85,7 +94,9 @@ for (let i = 0; i < CONFIG.variableCount; i++) {
     darkValue = 'benchmark/dark/' + (i + 1);
   }
   variable.setValueForMode(baseModeId, baseValue);
-  variable.setValueForMode(darkModeId, darkValue);
+  if (darkModeId) {
+    variable.setValueForMode(darkModeId, darkValue);
+  }
 }
 
 let loadedFonts = [];
@@ -179,6 +190,8 @@ await figma.setCurrentPageAsync(firstPage);
 return {
   success: true,
   fixtureVersion: CONFIG.fixtureVersion,
+  fileKey: figma.fileKey || null,
+  fileName: figma.root && figma.root.name ? figma.root.name : null,
   variableCount: CONFIG.variableCount,
   pageCount: CONFIG.pageCount,
   collectionCount: collections.length,
@@ -189,5 +202,8 @@ return {
   pageTextCount,
   loadedFonts,
   activePage: firstPage.name,
-  note: 'Keep this file dedicated to the manual benchmark and record whether it was freshly opened before each run.',
+  modesPerCollection: darkModeAvailable ? 2 : 1,
+  note: darkModeAvailable
+    ? 'Keep this file dedicated to the manual benchmark and record whether it was freshly opened before each run.'
+    : 'Dark mode omitted because this Figma plan allows only one mode per collection. Keep this file dedicated to the manual benchmark.',
 };

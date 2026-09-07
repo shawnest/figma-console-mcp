@@ -15,6 +15,7 @@ Use the deterministic Node-based benchmarks for performance work. They do not re
 npm run benchmark:startup       # MCP spawn, initialize, and tools/list
 npm run benchmark:transport     # WebSocket bridge round trips and lifecycle cleanup
 npm run benchmark:design-system # design-system kit assembly with generated fixtures
+npm run benchmark:plugin-startup # plugin worker eval, listener ready time, deferred all-page loading
 npm run benchmark               # all deterministic suites
 npm run benchmark:smoke         # fast correctness/lifecycle smoke checks
 ```
@@ -38,6 +39,16 @@ For a before/after experiment:
 
 The comparator reports changes as diagnostic when machine, fixture, or critical configuration differs. Do not compare deterministic Node results with manual real-Figma plugin measurements.
 
+### Real-Figma fixture (not CI)
+
+CI never opens Figma. GitHub Actions and `npm run benchmark:smoke` stay on synthetic Node suites. Plugin API, page loading, fonts, and worker/UI/`postMessage` timings are manual and machine-specific.
+
+Use the dedicated [Benchmark](https://www.figma.com/design/fRMASslPXRlRqMw0jA2wQk/Benchmark?node-id=0-1) file (`fRMASslPXRlRqMw0jA2wQk`; identity in `benchmarks/fixtures/figma-plugin-host.json`). Do not generate fixtures into product files. The generator (`benchmarks/fixtures/figma-plugin-fixture.js`) requires exactly one page and never deletes existing content, so duplicate the host before each new tier. Start with Small (10 variables, 5 pages); Medium is the first real baseline. On Starter/free plans Dark mode is omitted (one mode per collection).
+
+The Benchmark panel exists only on **Figma Desktop Bridge (local)** from this repo (`figma-desktop-bridge/manifest.json`, also copied to `~/.figma-console-mcp/plugin-local/`). The published plugin at `~/.figma-console-mcp/plugin/` has no Benchmark UI. Import the local manifest, run it in the fixture file, then `+` → `Benchmark` → Start → Run sample → Export JSON. Full procedure: `docs/performance-benchmark-plugin-fixture.md`.
+
+Live MCP checks (`figma_navigate`, `figma_execute`, `figma_get_variables`, `figma_get_file_data`) may use the same file without the Benchmark panel. Do not add CI jobs that depend on this file or Figma Desktop.
+
 ## Baselines and CI
 
 Baselines are promoted explicitly and should be reviewed separately from optimization code:
@@ -49,6 +60,6 @@ node benchmarks/design-system.mjs \
 
 Use the corresponding startup or transport script for those suites. Read `benchmarks/baselines/README.md` before replacing a committed baseline.
 
-CI runs `npm run benchmark:smoke`. It is report-only for timing and memory; active gates cover startup catalog size, design-system request/response limits, transport cleanup, and lifecycle guards. Run the smoke suite locally for changes affecting startup, WebSocket handling, serialization, or design-system assembly.
+CI runs `npm run benchmark:smoke`. It is report-only for timing and memory; active gates cover startup catalog size, design-system request/response limits, transport cleanup, lifecycle guards, and plugin-startup page-load deferral. It does not use Figma Desktop or the Benchmark file. Run the smoke suite locally for changes affecting startup, WebSocket handling, serialization, plugin listeners, or design-system assembly.
 
 For full benchmark details, see `benchmarks/README.md` and `docs/performance-benchmark-plan.md`.

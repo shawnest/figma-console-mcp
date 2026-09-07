@@ -106,6 +106,7 @@ function __benchmarkSnapshot() {
     pluginVersion: PLUGIN_VERSION,
     editorType: __editorType,
     fileKey: figma.fileKey || null,
+    fileUrl: figma.fileKey ? ('https://www.figma.com/design/' + figma.fileKey) : null,
     fileName: rootName,
     activePage: pageName,
     startedAt: __benchmarkState.startedAt,
@@ -385,6 +386,216 @@ if (__editorType === 'figjam' || __editorType === 'slides') {
     type: 'VARIABLES_DATA',
     data: __variablesSnapshot
   });
+}
+
+// ============================================================================
+// PERF-02: Deferred all-page loading and document-change tracking
+// ============================================================================
+// Selection and current-page listeners are valid on the current page without
+// loadAllPagesAsync(). documentchange in dynamic-page mode is not: Figma
+// requires every page to be loaded first. Keep that expensive read off the
+// default startup path and activate it once, when an MCP or cloud client
+// connects and actually needs change tracking.
+var __allPagesLoaded = false;
+var __allPagesLoadPromise = null;
+var __selectionAndPageListenersRegistered = false;
+var __documentChangeListenerRegistered = false;
+var __documentChangeTrackingPromise = null;
+
+function __loadAllPagesAsync(requestId, trigger) {
+  if (__allPagesLoaded) return Promise.resolve();
+  if (__allPagesLoadPromise) return __allPagesLoadPromise;
+
+  var startedAt = __benchmarkClock();
+  var loadPromise = figma.loadAllPagesAsync().then(function() {
+    __allPagesLoaded = true;
+    if (__allPagesLoadPromise === loadPromise) __allPagesLoadPromise = null;
+    __benchmarkRecord('load-all-pages-async', startedAt, __benchmarkClock(), {
+      requestId: requestId || null,
+      api: 'figma.loadAllPagesAsync',
+      trigger: trigger || 'unspecified'
+    });
+  }, function(error) {
+    if (__allPagesLoadPromise === loadPromise) __allPagesLoadPromise = null;
+    throw error;
+  });
+
+  __allPagesLoadPromise = loadPromise;
+  return loadPromise;
+}
+
+function __registerSelectionAndPageListeners() {
+  if (__selectionAndPageListenersRegistered) return;
+  __selectionAndPageListenersRegistered = true;
+  var startedAt = __benchmarkClock();
+
+  figma.on('selectionchange', function() {
+    var selection = figma.currentPage.selection;
+    var selectedNodes = [];
+    for (var i = 0; i < Math.min(selection.length, 50); i++) {
+      try {
+        var node = selection[i];
+        selectedNodes.push({
+          id: node.id,
+          name: node.name,
+          type: node.type,
+          width: node.width,
+          height: node.height
+        });
+      } catch (e) {
+        // Slot sublayers and table cells may not be fully resolvable —
+        // accessing .name throws "does not exist" for these node types.
+        // Skip silently rather than crashing the plugin.
+      }
+    }
+    figma.ui.postMessage({
+      type: 'SELECTION_CHANGE',
+      data: {
+        nodes: selectedNodes,
+        count: selection.length,
+        page: figma.currentPage.name,
+        timestamp: Date.now()
+      }
+    });
+  });
+
+  figma.on('currentpagechange', function() {
+    figma.ui.postMessage({
+      type: 'PAGE_CHANGE',
+      data: {
+        pageId: figma.currentPage.id,
+        pageName: figma.currentPage.name,
+        timestamp: Date.now()
+      }
+    });
+  });
+
+  __benchmarkRecord('selection-and-page-listeners-ready', startedAt, __benchmarkClock(), {
+    scope: 'plugin-lifecycle'
+  });
+  console.log('🌉 [Desktop Bridge] Selection and page listeners registered');
+}
+
+function __registerDocumentChangeListener() {
+  if (__documentChangeListenerRegistered) return;
+  __documentChangeListenerRegistered = true;
+
+  figma.on('documentchange', function(event) {
+    var hasStyleChanges = false;
+    var hasNodeChanges = false;
+    var changedNodeIds = [];
+
+    // v1.25.0: also collect metadata-only changes (descriptions, annotations).
+    // These are properties that the REST API DOESN'T expose in version snapshots,
+    // so figma_diff_versions can't see them through REST alone. Forwarding them
+    // via the Plugin API + WebSocket is the only way to make them diff-visible.
+    var metadataChanges = [];
+
+    for (var i = 0; i < event.documentChanges.length; i++) {
+      var change = event.documentChanges[i];
+      if (change.type === 'STYLE_CREATE' || change.type === 'STYLE_DELETE' || change.type === 'STYLE_PROPERTY_CHANGE') {
+        hasStyleChanges = true;
+      } else if (change.type === 'CREATE' || change.type === 'DELETE' || change.type === 'PROPERTY_CHANGE') {
+        hasNodeChanges = true;
+        if (change.id && changedNodeIds.length < 50) {
+          changedNodeIds.push(change.id);
+        }
+      }
+
+      // Metadata change detection. PROPERTY_CHANGE includes a `properties` array
+      // listing which fields changed; we only snapshot the new value for the
+      // two fields Figma's REST never returns: `description` and `annotations`.
+      if (change.type === 'PROPERTY_CHANGE' && change.node && Array.isArray(change.properties)) {
+        for (var p = 0; p < change.properties.length; p++) {
+          var prop = change.properties[p];
+          if (prop === 'description' || prop === 'descriptionMarkdown' || prop === 'annotations') {
+            try {
+              var newValue = change.node[prop];
+              // Serialize annotations to plain JSON-safe form
+              if (prop === 'annotations' && Array.isArray(newValue)) {
+                newValue = newValue.map(function(a) {
+                  return {
+                    label: a.label || null,
+                    labelMarkdown: a.labelMarkdown || null,
+                    categoryId: a.categoryId || null,
+                    properties: a.properties || []
+                  };
+                });
+              }
+              metadataChanges.push({
+                node_id: change.node.id,
+                node_name: change.node.name || null,
+                node_type: change.node.type || null,
+                field: prop === 'descriptionMarkdown' ? 'description' : prop,
+                new_value: newValue,
+                timestamp: Date.now()
+              });
+            } catch (e) {
+              // Some property reads can throw on detached / deleted nodes
+            }
+          }
+        }
+      }
+    }
+
+    if (metadataChanges.length > 0) {
+      figma.ui.postMessage({
+        type: 'METADATA_CHANGE',
+        data: { changes: metadataChanges }
+      });
+    }
+
+    if (hasStyleChanges || hasNodeChanges) {
+      figma.ui.postMessage({
+        type: 'DOCUMENT_CHANGE',
+        data: {
+          hasStyleChanges: hasStyleChanges,
+          hasNodeChanges: hasNodeChanges,
+          changedNodeIds: changedNodeIds,
+          changeCount: event.documentChanges.length,
+          timestamp: Date.now()
+        }
+      });
+    }
+  });
+}
+
+function __ensureDocumentChangeTracking(requestId) {
+  if (__documentChangeListenerRegistered) {
+    return Promise.resolve({
+      activated: true,
+      alreadyActive: true,
+      allPagesLoaded: __allPagesLoaded
+    });
+  }
+  if (__documentChangeTrackingPromise) return __documentChangeTrackingPromise;
+
+  var startedAt = __benchmarkClock();
+  var trackingPromise = __loadAllPagesAsync(requestId, 'change-tracking').then(function() {
+    __registerDocumentChangeListener();
+    __benchmarkRecord('document-change-tracking-ready', startedAt, __benchmarkClock(), {
+      requestId: requestId || null,
+      scope: 'plugin-lifecycle',
+      trigger: 'first-server-connection'
+    });
+    console.log('🌉 [Desktop Bridge] Document change tracking activated');
+    return {
+      activated: true,
+      alreadyActive: false,
+      allPagesLoaded: true
+    };
+  }, function(error) {
+    // Leave selection/page tracking alone. A failed activation must be
+    // retryable on the next connection or explicit ensure request.
+    if (__documentChangeTrackingPromise === trackingPromise) {
+      __documentChangeTrackingPromise = null;
+    }
+    console.warn('🌉 [Desktop Bridge] Could not activate document change tracking:', error && error.message ? error.message : String(error));
+    throw error;
+  });
+
+  __documentChangeTrackingPromise = trackingPromise;
+  return trackingPromise;
 }
 
 // Helper to extract a component's SLOT contract (Figma slots, GA June 2026).
@@ -726,6 +937,26 @@ figma.ui.onmessage = async (msg) => {
       success: true,
       data: __benchmarkSnapshot()
     });
+    return;
+  }
+
+  if (msg.type === 'ENSURE_DOCUMENT_CHANGE_TRACKING') {
+    try {
+      var tracking = await __ensureDocumentChangeTracking(msg.requestId);
+      figma.ui.postMessage({
+        type: 'ENSURE_DOCUMENT_CHANGE_TRACKING_RESULT',
+        requestId: msg.requestId,
+        success: true,
+        data: tracking
+      });
+    } catch (error) {
+      figma.ui.postMessage({
+        type: 'ENSURE_DOCUMENT_CHANGE_TRACKING_RESULT',
+        requestId: msg.requestId,
+        success: false,
+        error: error && error.message ? error.message : String(error)
+      });
+    }
     return;
   }
 
@@ -2103,14 +2334,10 @@ figma.ui.onmessage = async (msg) => {
         }
       }
 
-      // Load all pages first (required before accessing children)
+      // Load all pages first (required before accessing children). Shares the
+      // in-flight/cached load used by deferred document-change tracking.
       console.log('🌉 [Desktop Bridge] Loading all pages...');
-      var loadAllPagesStartedAt = __benchmarkClock();
-      await figma.loadAllPagesAsync();
-      __benchmarkRecord('load-all-pages-async', loadAllPagesStartedAt, __benchmarkClock(), {
-        requestId: msg.requestId,
-        api: 'figma.loadAllPagesAsync'
-      });
+      await __loadAllPagesAsync(msg.requestId, 'GET_LOCAL_COMPONENTS');
 
       // Process pages in batches with event loop yields to prevent UI freeze
       // This is critical for large design systems that could otherwise crash
@@ -7536,137 +7763,10 @@ figma.ui.onmessage = async (msg) => {
   }
 };
 
-// ============================================================================
-// DOCUMENT CHANGE LISTENER - Forward change events for cache invalidation
-// Fires when variables, styles, or nodes change (by any means — user edits, API, etc.)
-// Requires figma.loadAllPagesAsync() in dynamic-page mode before registering.
-// ============================================================================
-figma.loadAllPagesAsync().then(function() {
-  figma.on('documentchange', function(event) {
-    var hasStyleChanges = false;
-    var hasNodeChanges = false;
-    var changedNodeIds = [];
-
-    // v1.25.0: also collect metadata-only changes (descriptions, annotations).
-    // These are properties that the REST API DOESN'T expose in version snapshots,
-    // so figma_diff_versions can't see them through REST alone. Forwarding them
-    // via the Plugin API + WebSocket is the only way to make them diff-visible.
-    var metadataChanges = [];
-
-    for (var i = 0; i < event.documentChanges.length; i++) {
-      var change = event.documentChanges[i];
-      if (change.type === 'STYLE_CREATE' || change.type === 'STYLE_DELETE' || change.type === 'STYLE_PROPERTY_CHANGE') {
-        hasStyleChanges = true;
-      } else if (change.type === 'CREATE' || change.type === 'DELETE' || change.type === 'PROPERTY_CHANGE') {
-        hasNodeChanges = true;
-        if (change.id && changedNodeIds.length < 50) {
-          changedNodeIds.push(change.id);
-        }
-      }
-
-      // Metadata change detection. PROPERTY_CHANGE includes a `properties` array
-      // listing which fields changed; we only snapshot the new value for the
-      // two fields Figma's REST never returns: `description` and `annotations`.
-      if (change.type === 'PROPERTY_CHANGE' && change.node && Array.isArray(change.properties)) {
-        for (var p = 0; p < change.properties.length; p++) {
-          var prop = change.properties[p];
-          if (prop === 'description' || prop === 'descriptionMarkdown' || prop === 'annotations') {
-            try {
-              var newValue = change.node[prop];
-              // Serialize annotations to plain JSON-safe form
-              if (prop === 'annotations' && Array.isArray(newValue)) {
-                newValue = newValue.map(function(a) {
-                  return {
-                    label: a.label || null,
-                    labelMarkdown: a.labelMarkdown || null,
-                    categoryId: a.categoryId || null,
-                    properties: a.properties || []
-                  };
-                });
-              }
-              metadataChanges.push({
-                node_id: change.node.id,
-                node_name: change.node.name || null,
-                node_type: change.node.type || null,
-                field: prop === 'descriptionMarkdown' ? 'description' : prop,
-                new_value: newValue,
-                timestamp: Date.now()
-              });
-            } catch (e) {
-              // Some property reads can throw on detached / deleted nodes
-            }
-          }
-        }
-      }
-    }
-
-    if (metadataChanges.length > 0) {
-      figma.ui.postMessage({
-        type: 'METADATA_CHANGE',
-        data: { changes: metadataChanges }
-      });
-    }
-
-    if (hasStyleChanges || hasNodeChanges) {
-      figma.ui.postMessage({
-        type: 'DOCUMENT_CHANGE',
-        data: {
-          hasStyleChanges: hasStyleChanges,
-          hasNodeChanges: hasNodeChanges,
-          changedNodeIds: changedNodeIds,
-          changeCount: event.documentChanges.length,
-          timestamp: Date.now()
-        }
-      });
-    }
-  });
-  // Selection change listener — tracks what the user has selected in Figma
-  figma.on('selectionchange', function() {
-    var selection = figma.currentPage.selection;
-    var selectedNodes = [];
-    for (var i = 0; i < Math.min(selection.length, 50); i++) {
-      try {
-        var node = selection[i];
-        selectedNodes.push({
-          id: node.id,
-          name: node.name,
-          type: node.type,
-          width: node.width,
-          height: node.height
-        });
-      } catch (e) {
-        // Slot sublayers and table cells may not be fully resolvable —
-        // accessing .name throws "does not exist" for these node types.
-        // Skip silently rather than crashing the plugin.
-      }
-    }
-    figma.ui.postMessage({
-      type: 'SELECTION_CHANGE',
-      data: {
-        nodes: selectedNodes,
-        count: selection.length,
-        page: figma.currentPage.name,
-        timestamp: Date.now()
-      }
-    });
-  });
-
-  // Page change listener — tracks which page the user is viewing
-  figma.on('currentpagechange', function() {
-    figma.ui.postMessage({
-      type: 'PAGE_CHANGE',
-      data: {
-        pageId: figma.currentPage.id,
-        pageName: figma.currentPage.name,
-        timestamp: Date.now()
-      }
-    });
-  });
-
-  console.log('🌉 [Desktop Bridge] Document change, selection, and page listeners registered');
-}).catch(function(err) {
-  console.warn('🌉 [Desktop Bridge] Could not register event listeners:', err);
-});
+// Lightweight listeners are valid immediately. All-page loading and
+// documentchange stay behind __ensureDocumentChangeTracking(), which the UI
+// fires on the first local or cloud WebSocket connection.
+__registerSelectionAndPageListeners();
 
 console.log('🌉 [Desktop Bridge] Ready to handle component requests');
 console.log('🌉 [Desktop Bridge] Plugin will stay open until manually closed');

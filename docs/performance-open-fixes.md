@@ -57,31 +57,35 @@ Done when:
 
 ### PERF-02: Defer all-page loading and register lightweight listeners immediately
 
-**Status:** Open  
+**Status:** Implemented; manual Figma measurement pending  
 **Expected impact:** High for files with many or large pages  
 **Primary metric:** Fresh plugin ready time across the 5/25/100-page tiers
 
-`figma.loadAllPagesAsync()` currently runs during plugin startup. The selection and page listeners are registered only after that promise resolves.
+The plugin now registers `selectionchange` and `currentpagechange` during worker evaluation. `figma.loadAllPagesAsync()` and `documentchange` stay behind `__ensureDocumentChangeTracking()`.
+
+Activation point: the first local or cloud WebSocket connection. The iframe sends `ENSURE_DOCUMENT_CHANGE_TRACKING` from `initializeConnection` and does not wait for all-page loading before `FILE_INFO`. Selection and page listeners stay on the default startup path.
 
 Implementation checklist:
 
-- [ ] Register `selectionchange` immediately.
-- [ ] Register `currentpagechange` immediately.
-- [ ] Isolate `documentchange` setup behind a single idempotent initializer.
-- [ ] Trigger all-page loading only when change tracking is needed.
-- [ ] Decide and document the activation point: first server connection, first change-history request, or explicit capability enablement.
-- [ ] Coalesce concurrent activation attempts.
-- [ ] Report activation failure without disabling selection/page tracking.
-- [ ] Confirm that all document-change functionality remains available after activation.
+- [x] Register `selectionchange` immediately.
+- [x] Register `currentpagechange` immediately.
+- [x] Isolate `documentchange` setup behind a single idempotent initializer.
+- [x] Trigger all-page loading only when change tracking is needed.
+- [x] Decide and document the activation point: first server connection, first change-history request, or explicit capability enablement.
+- [x] Coalesce concurrent activation attempts.
+- [x] Report activation failure without disabling selection/page tracking.
+- [x] Confirm that all document-change functionality remains available after activation.
 
 Measurement:
 
-- Use the manual Figma fixture at 5, 25, and 100 pages.
+- Run `npm run benchmark:plugin-startup` for the 5/25/100-page simulated delays.
+- Use the manual Figma fixture at 5, 25, and 100 pages for real Plugin API confirmation.
 - Measure code evaluation to UI ready, WebSocket connected, selection listener ready, and all-page loading separately.
 - Exercise selection changes before and during deferred page loading.
 
 Correctness checks:
 
+- Run `tests/plugin-document-change-tracking.test.ts` and the WebSocket bridge tests.
 - Verify selection and current-page state immediately after startup.
 - Verify document changes still invalidate the correct file cache after activation.
 - Verify repeated activation does not add duplicate listeners.

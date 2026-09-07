@@ -6,7 +6,9 @@ Results are manual and machine-specific. The benchmark mode is disabled during n
 
 ## Controlled fixture
 
-Use a fresh, dedicated Figma file. The generator is [figma-plugin-fixture.js](../benchmarks/fixtures/figma-plugin-fixture.js); paste its contents into `figma_execute` after editing `CONFIG` for the tier being prepared.
+Use the dedicated empty [Benchmark](https://www.figma.com/design/fRMASslPXRlRqMw0jA2wQk/Benchmark?node-id=0-1) Figma file as the host. Identity is recorded in [figma-plugin-host.json](../benchmarks/fixtures/figma-plugin-host.json): file key `fRMASslPXRlRqMw0jA2wQk`, starting page `0:1`. Keep that file (and duplicates of it) for plugin and live MCP checks; do not generate fixtures into product files.
+
+The generator is [figma-plugin-fixture.js](../benchmarks/fixtures/figma-plugin-fixture.js). Duplicate the empty Benchmark file for the tier being prepared, open the Desktop Bridge plugin in that copy, then paste the generator into `figma_execute` after editing `CONFIG`. The generator refuses to run unless the file still has exactly one page and never deletes existing content, so each tier needs its own empty duplicate. Contributors without access to this file can follow the same one-page empty-host procedure in their own account.
 
 | Fixture tier | Variables | Pages | Components created per page | Variants per set |
 | --- | ---: | ---: | --- | ---: |
@@ -15,14 +17,14 @@ Use a fresh, dedicated Figma file. The generator is [figma-plugin-fixture.js](..
 | Large | 1,000 | 100 | 1 component set, 2 instances, 1 standalone, 3 text nodes | 4 |
 | Stress | 5,000 | 100 | 1 component set, 2 instances, 1 standalone, 3 text nodes | 4 |
 
-The generator creates four variable collections with Base and Dark modes, deterministic names and values, component-set variant names using `State` and `Size` axes, instances, standalone components, and text nodes using Inter Regular/Bold where available. It refuses to run unless the file starts with exactly one page and never deletes existing content.
+The generator creates four variable collections with a Base mode and a Dark mode when the Figma plan allows more than one mode. On Starter/free plans `addMode` is skipped and variables keep a single Base mode so generation can still complete. It also creates component-set variant names using `State` and `Size` axes, instances, standalone components, and text nodes using Inter Regular/Bold where available. It refuses to run unless the file starts with exactly one page and never deletes existing content.
 
 Prepare each tier independently. After generating it, close and reopen the Figma file before measuring if the run should represent a freshly opened file. Do not mix tiers in one result.
 
 ## Procedure
 
 1. Build and start the local server (`npm run dev:local` in a separate terminal, or start it through an MCP client), then import or refresh `figma-desktop-bridge/manifest.json` in Figma Desktop.
-2. Open the dedicated fixture file and run the Desktop Bridge plugin.
+2. Open the prepared Benchmark duplicate in Figma Desktop (or `figma_navigate` to it) and run the Desktop Bridge plugin. Record the copy's file key from the Benchmark JSON export; only the empty original keeps `fRMASslPXRlRqMw0jA2wQk`.
 3. Expand `+`, open `Benchmark`, and enter:
    - `Fixture`: `ds-fixture-v1`;
    - `Desktop`: the Figma Desktop version from the app's About screen;
@@ -42,6 +44,7 @@ Plugin-worker entries include:
 - `local-variable-retrieval` and `variable-collection-retrieval`;
 - `variable-mapping-serialization`;
 - `load-all-pages-async`;
+- `selection-and-page-listeners-ready` and `document-change-tracking-ready`;
 - `component-traversal`;
 - `unique-font-discovery` and `font-loading`.
 
@@ -59,7 +62,7 @@ The benchmark marker messages are separate from command messages. They are sent 
 
 Record the following alongside every exported JSON file:
 
-- fixture version and tier;
+- fixture version and tier, plus the host file key or duplicate file key;
 - Figma Desktop version and editor type;
 - plugin version;
 - operating system and machine model;
@@ -69,3 +72,9 @@ Record the following alongside every exported JSON file:
 - any font families unavailable on that machine.
 
 This is a manual benchmark by design. It is not part of CI and must not be treated as a stable regression threshold until enough controlled runs exist for the target machine and Figma Desktop version.
+
+## Live MCP checks
+
+The same empty host is the safe file for live MCP/plugin exercises that Node mocks cannot cover: `figma_navigate` to the URL, `figma_execute` for fixture generation, then read-only tools such as `figma_get_variables` and `figma_get_file_data`. Keep writes inside this file or a duplicate of it.
+
+Startup, WebSocket transport, and design-system kit benchmarks stay on generated fixtures and do not call this file. CI must not depend on it.

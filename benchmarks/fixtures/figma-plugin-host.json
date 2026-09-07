@@ -1,0 +1,10 @@
+{
+  "fileKey": "fRMASslPXRlRqMw0jA2wQk",
+  "fileName": "Benchmark",
+  "fileUrl": "https://www.figma.com/design/fRMASslPXRlRqMw0jA2wQk/Benchmark",
+  "emptyPageNodeId": "0:1",
+  "emptyPageUrl": "https://www.figma.com/design/fRMASslPXRlRqMw0jA2wQk/Benchmark?node-id=0-1",
+  "purpose": "Dedicated empty Figma host for manual Desktop Bridge plugin benchmarks and live MCP checks. Do not use product files. Duplicate this empty file before generating a fixture tier; the generator requires exactly one page and never deletes existing content.",
+  "fixtureVersion": "ds-fixture-v1",
+  "generator": "benchmarks/fixtures/figma-plugin-fixture.js"
+}
